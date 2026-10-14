@@ -4,8 +4,8 @@
  * Compatible with XAMPP (Windows) and LAMP (Linux)
  */
 
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
+// Start session if not already started and headers not sent
+if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
     session_start();
 }
 
