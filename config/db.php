@@ -79,3 +79,29 @@ function require_login() {
         exit;
     }
 }
+
+function is_doctor() {
+    return is_logged_in() && ($_SESSION['user_role'] ?? '') === 'doctor';
+}
+
+function is_admin() {
+    return is_logged_in() && ($_SESSION['user_role'] ?? '') === 'admin';
+}
+
+function require_doctor() {
+    require_login();
+    if (!is_doctor()) {
+        set_flash('error', 'Access restricted to medical doctors only.');
+        header('Location: index.php');
+        exit;
+    }
+}
+
+function require_admin() {
+    require_login();
+    if (!is_admin()) {
+        set_flash('error', 'Access restricted to clinic administrators only.');
+        header('Location: index.php');
+        exit;
+    }
+}

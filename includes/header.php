@@ -29,21 +29,53 @@ $user = current_user();
             </a>
 
             <ul class="nav-links">
-                <li>
-                    <a href="index.php" class="nav-link <?php echo ($current_page === 'index.php') ? 'active' : ''; ?>" id="nav-doctors">
-                        Doctors
-                    </a>
-                </li>
-
                 <?php if (is_logged_in()): ?>
-                    <li>
-                        <a href="dashboard.php" class="nav-link <?php echo ($current_page === 'dashboard.php') ? 'active' : ''; ?>" id="nav-appointments">
-                            My Appointments
-                        </a>
-                    </li>
+                    <?php if ($user['role'] === 'admin'): ?>
+                        <li>
+                            <a href="admin_dashboard.php" class="nav-link <?php echo ($current_page === 'admin_dashboard.php' || strpos($current_page, 'admin_') === 0) ? 'active' : ''; ?>" id="nav-admin">
+                                Admin Panel
+                            </a>
+                        </li>
+                        <li>
+                            <a href="index.php" class="nav-link <?php echo ($current_page === 'index.php') ? 'active' : ''; ?>" id="nav-doctors">
+                                Doctors Directory
+                            </a>
+                        </li>
+                    <?php elseif ($user['role'] === 'doctor'): ?>
+                        <li>
+                            <a href="doctor_dashboard.php" class="nav-link <?php echo ($current_page === 'doctor_dashboard.php') ? 'active' : ''; ?>" id="nav-doctor-schedule">
+                                My Patients & Schedule
+                            </a>
+                        </li>
+                        <li>
+                            <a href="index.php" class="nav-link <?php echo ($current_page === 'index.php') ? 'active' : ''; ?>" id="nav-doctors">
+                                Doctors Directory
+                            </a>
+                        </li>
+                    <?php else: ?>
+                        <li>
+                            <a href="index.php" class="nav-link <?php echo ($current_page === 'index.php') ? 'active' : ''; ?>" id="nav-doctors">
+                                Doctors
+                            </a>
+                        </li>
+                        <li>
+                            <a href="dashboard.php" class="nav-link <?php echo ($current_page === 'dashboard.php') ? 'active' : ''; ?>" id="nav-appointments">
+                                My Appointments
+                            </a>
+                        </li>
+                    <?php endif; ?>
+
                     <li class="user-badge" id="user-badge">
                         <span class="user-avatar-initial"><?php echo strtoupper(substr($user['name'], 0, 1)); ?></span>
-                        <span><?php echo e($user['name']); ?></span>
+                        <span>
+                            <?php 
+                            if ($user['role'] === 'admin') {
+                                echo 'Admin: ' . e($user['name']);
+                            } else {
+                                echo e($user['name']);
+                            }
+                            ?>
+                        </span>
                     </li>
                     <li>
                         <a href="logout.php" class="btn btn-outline btn-sm" id="btn-logout">
@@ -51,6 +83,11 @@ $user = current_user();
                         </a>
                     </li>
                 <?php else: ?>
+                    <li>
+                        <a href="index.php" class="nav-link <?php echo ($current_page === 'index.php') ? 'active' : ''; ?>" id="nav-doctors">
+                            Doctors
+                        </a>
+                    </li>
                     <li>
                         <a href="login.php" class="nav-link <?php echo ($current_page === 'login.php') ? 'active' : ''; ?>" id="nav-login">
                             Login

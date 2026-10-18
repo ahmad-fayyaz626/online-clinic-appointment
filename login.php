@@ -1,9 +1,16 @@
 <?php
 require_once __DIR__ . '/config/db.php';
 
-// Redirect if already logged in
+// Redirect if already logged in based on role
 if (is_logged_in()) {
-    header('Location: index.php');
+    $role = $_SESSION['user_role'] ?? 'patient';
+    if ($role === 'admin') {
+        header('Location: admin_dashboard.php');
+    } elseif ($role === 'doctor') {
+        header('Location: doctor_dashboard.php');
+    } else {
+        header('Location: dashboard.php');
+    }
     exit;
 }
 
@@ -32,7 +39,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_role']  = $user['role'];
 
             set_flash('success', "Welcome back, " . $user['full_name'] . "!");
-            header('Location: index.php');
+
+            // Role-based destination redirect
+            if ($user['role'] === 'admin') {
+                header('Location: admin_dashboard.php');
+            } elseif ($user['role'] === 'doctor') {
+                header('Location: doctor_dashboard.php');
+            } else {
+                header('Location: dashboard.php');
+            }
             exit;
         } else {
             $error = 'Invalid email or password combination.';
