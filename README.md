@@ -87,9 +87,10 @@ All internal URLs, assets, and includes use relative paths and standard director
 
 | Account Type | Email | Password | Details |
 | --- | --- | --- | --- |
-| **Patient** | `ali@example.com` | `Patient@123` | Ali Khan (Pre-registered patient) |
-| **Doctor** | `sara.khan@clinic.com` | `Doctor@123` | Dr. Sara Khan (Cardiology) |
+| **Admin** | `admin@clinic.com` | `Admin@123` | Clinic Admin (Full Doctor CRUD & Metrics) |
+| **Doctor** | `sara.khan@clinic.com` | `Doctor@123` | Dr. Sara Khan (Cardiology - Schedule & Patient Management) |
 | **Doctor** | `ahmed.raza@clinic.com` | `Doctor@123` | Dr. Ahmed Raza (Dentistry) |
 | **Doctor** | `ayesha.malik@clinic.com` | `Doctor@123` | Dr. Ayesha Malik (Neurology) |
+| **Patient** | `ali@example.com` | `Patient@123` | Ali Khan (Pre-registered patient) |
 
-*You can also create a new patient account anytime via the **Create Account** button on the website.*
+*You can also create a new patient account anytime via the **Create Account** button on the website, or add new doctors via the Admin Panel.*

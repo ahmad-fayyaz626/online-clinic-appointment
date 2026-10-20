@@ -87,3 +87,8 @@ ON DUPLICATE KEY UPDATE `qualification`=VALUES(`qualification`), `fee`=VALUES(`f
 INSERT INTO `users` (`id`, `full_name`, `email`, `password`, `phone`, `role`) VALUES
 (7, 'Ali Khan', 'ali@example.com', '$2y$10$gU0ize7xZn6Hgvrp.3504Of19PtscXQo3i.FXPFhdzFXip6V6Wou2', '03123456789', 'patient')
 ON DUPLICATE KEY UPDATE `full_name`=VALUES(`full_name`);
+
+-- Clinic Administrator User (Password: Admin@123)
+INSERT INTO `users` (`id`, `full_name`, `email`, `password`, `phone`, `role`) VALUES
+(8, 'Clinic Admin', 'admin@clinic.com', '$2y$10$6FJ3nayJ3AVyKyBY81VtSe0jgMPYkOlX4.kJEXqj1IlsueYF/BUKq', '03001239999', 'admin')
+ON DUPLICATE KEY UPDATE `full_name`=VALUES(`full_name`);
