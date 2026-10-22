@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$page_title = 'Patient Login';
+$page_title = 'Account Login';
 require_once __DIR__ . '/includes/header.php';
 ?>
 
@@ -64,7 +64,7 @@ require_once __DIR__ . '/includes/header.php';
         <div class="card-body">
             <div class="auth-header">
                 <h1>Welcome Back</h1>
-                <p>Sign in to manage your clinic appointments</p>
+                <p>Sign in to your account (Patient, Doctor, or Admin)</p>
             </div>
 
             <?php if (!empty($error)): ?>
@@ -122,7 +122,17 @@ require_once __DIR__ . '/includes/header.php';
             </form>
 
             <div class="auth-footer">
-                Don't have an account yet? <a href="signup.php">Register Here</a>
+                Don't have a patient account yet? <a href="signup.php">Register Here</a>
+            </div>
+
+            <!-- Demo Test Credentials Box -->
+            <div style="margin-top: 24px; padding: 14px 16px; background: #f8fafc; border: 1px dashed var(--border); border-radius: var(--radius-md); font-size: 0.85rem;">
+                <div style="font-weight: 700; color: var(--primary); margin-bottom: 8px;">🔑 Quick Test Credentials:</div>
+                <div style="display: flex; flex-direction: column; gap: 6px; color: var(--text-secondary);">
+                    <div><strong>Admin:</strong> <code>admin@clinic.com</code> &middot; <code>Admin@123</code></div>
+                    <div><strong>Doctor:</strong> <code>sara.khan@clinic.com</code> &middot; <code>Doctor@123</code></div>
+                    <div><strong>Patient:</strong> <code>ali@example.com</code> &middot; <code>Patient@123</code></div>
+                </div>
             </div>
         </div>
     </div>

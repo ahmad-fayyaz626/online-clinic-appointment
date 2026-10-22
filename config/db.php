@@ -26,6 +26,16 @@ $options = [
 
 try {
     $pdo = new PDO($dsn, $db_user, $db_pass, $options);
+
+    // Auto-migration: ensure doctor_notes column exists on appointments
+    try {
+        $col_check = $pdo->query("SHOW COLUMNS FROM `appointments` LIKE 'doctor_notes'")->fetch();
+        if (!$col_check) {
+            $pdo->exec("ALTER TABLE `appointments` ADD COLUMN `doctor_notes` TEXT DEFAULT NULL AFTER `reason`");
+        }
+    } catch (Exception $e) {
+        // Table not yet created or permissions restricted
+    }
 } catch (PDOException $e) {
     die("Database Connection Failed: " . htmlspecialchars($e->getMessage()));
 }

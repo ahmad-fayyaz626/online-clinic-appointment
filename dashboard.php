@@ -15,6 +15,7 @@ $sql = "
         a.appointment_time,
         a.status,
         a.reason,
+        a.doctor_notes,
         a.created_at,
         u.full_name AS doctor_name,
         u.phone AS doctor_phone,
@@ -165,9 +166,15 @@ require_once __DIR__ . '/includes/header.php';
                         </td>
 
                         <td>
-                            <span style="font-size: 0.88rem; color: var(--text-secondary);">
+                            <div style="font-size: 0.88rem; color: var(--text-secondary);">
                                 <?php echo !empty($apt['reason']) ? e($apt['reason']) : '<span style="color: #94a3b8;">None specified</span>'; ?>
-                            </span>
+                            </div>
+                            <?php if (!empty($apt['doctor_notes'])): ?>
+                                <div style="margin-top: 6px; font-size: 0.82rem; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 6px 10px; border-radius: 6px; line-height: 1.4;">
+                                    <strong>📋 Doctor's Prescription:</strong><br>
+                                    <?php echo nl2br(e($apt['doctor_notes'])); ?>
+                                </div>
+                            <?php endif; ?>
                         </td>
 
                         <td>

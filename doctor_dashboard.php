@@ -60,6 +60,7 @@ $sql = "
         a.appointment_time,
         a.status,
         a.reason,
+        a.doctor_notes,
         a.created_at,
         p.full_name AS patient_name,
         p.email AS patient_email,
@@ -210,6 +211,11 @@ require_once __DIR__ . '/includes/header.php';
                             <div style="font-size: 0.9rem; color: var(--text-primary);">
                                 <?php echo !empty($apt['reason']) ? e($apt['reason']) : '<span style="color: #94a3b8; font-style: italic;">Routine Consultation</span>'; ?>
                             </div>
+                            <?php if (!empty($apt['doctor_notes'])): ?>
+                                <div style="font-size: 0.8rem; color: #065f46; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 4px 8px; border-radius: 4px; margin-top: 6px;">
+                                    <strong>Rx:</strong> <?php echo e($apt['doctor_notes']); ?>
+                                </div>
+                            <?php endif; ?>
                             <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
                                 Booked on <?php echo date('d M Y', strtotime($apt['created_at'])); ?>
                             </div>
@@ -230,13 +236,9 @@ require_once __DIR__ . '/includes/header.php';
                         <td style="padding: 16px 18px; text-align: right; white-space: nowrap;">
                             <?php if ($apt['status'] === 'booked'): ?>
                                 <div style="display: inline-flex; gap: 6px;">
-                                    <form action="doctor_update_status.php" method="POST" style="display: inline;">
-                                        <input type="hidden" name="appointment_id" value="<?php echo (int)$apt['appointment_id']; ?>">
-                                        <input type="hidden" name="status" value="completed">
-                                        <button type="submit" class="btn btn-sm" style="background-color: var(--success); color: #ffffff;" title="Mark consultation completed">
-                                            ✓ Complete
-                                        </button>
-                                    </form>
+                                    <a href="doctor_complete_appointment.php?id=<?php echo (int)$apt['appointment_id']; ?>" class="btn btn-sm" style="background-color: var(--success); color: #ffffff;" title="Complete & write prescription">
+                                        ✓ Complete
+                                    </a>
 
                                     <form action="doctor_update_status.php" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to cancel this appointment?');">
                                         <input type="hidden" name="appointment_id" value="<?php echo (int)$apt['appointment_id']; ?>">
@@ -247,9 +249,16 @@ require_once __DIR__ . '/includes/header.php';
                                     </form>
                                 </div>
                             <?php elseif ($apt['status'] === 'completed'): ?>
-                                <span style="font-size: 0.85rem; color: var(--success); font-weight: 600;">
-                                    ✓ Visited
-                                </span>
+                                <div>
+                                    <span style="font-size: 0.85rem; color: var(--success); font-weight: 600;">
+                                        ✓ Completed
+                                    </span>
+                                    <div style="margin-top: 2px;">
+                                        <a href="doctor_complete_appointment.php?id=<?php echo (int)$apt['appointment_id']; ?>" style="font-size: 0.78rem; color: var(--accent); text-decoration: underline;">
+                                            Edit Rx Notes
+                                        </a>
+                                    </div>
+                                </div>
                             <?php else: ?>
                                 <span style="font-size: 0.85rem; color: var(--text-muted);">
                                     Cancelled

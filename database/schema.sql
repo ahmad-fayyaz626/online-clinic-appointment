@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS `appointments` (
     `appointment_time` TIME NOT NULL,
     `status` ENUM('booked', 'cancelled', 'completed') NOT NULL DEFAULT 'booked',
     `reason` VARCHAR(255) DEFAULT NULL,
+    `doctor_notes` TEXT DEFAULT NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT `fk_appointments_patient` FOREIGN KEY (`patient_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_appointments_doctor` FOREIGN KEY (`doctor_id`) REFERENCES `doctors` (`id`) ON DELETE CASCADE
