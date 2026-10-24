@@ -66,16 +66,23 @@ $user = current_user();
                     <?php endif; ?>
 
                     <li class="user-badge" id="user-badge">
-                        <span class="user-avatar-initial"><?php echo strtoupper(substr($user['name'], 0, 1)); ?></span>
-                        <span>
-                            <?php 
-                            if ($user['role'] === 'admin') {
-                                echo 'Admin: ' . e($user['name']);
-                            } else {
-                                echo e($user['name']);
-                            }
-                            ?>
-                        </span>
+                        <a href="profile.php" style="display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none;" title="Edit Profile & Settings">
+                            <span class="user-avatar-initial"><?php echo strtoupper(substr($user['name'], 0, 1)); ?></span>
+                            <span>
+                                <?php 
+                                if ($user['role'] === 'admin') {
+                                    echo 'Admin: ' . e($user['name']);
+                                } else {
+                                    echo e($user['name']);
+                                }
+                                ?>
+                            </span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="profile.php" class="nav-link <?php echo ($current_page === 'profile.php') ? 'active' : ''; ?>" id="nav-profile">
+                            Profile
+                        </a>
                     </li>
                     <li>
                         <a href="logout.php" class="btn btn-outline btn-sm" id="btn-logout">

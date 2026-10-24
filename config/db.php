@@ -36,6 +36,28 @@ try {
     } catch (Exception $e) {
         // Table not yet created or permissions restricted
     }
+
+    // Auto-seed: ensure administrator account exists
+    try {
+        $admin_check = $pdo->query("SELECT id, password FROM `users` WHERE `email` = 'admin@clinic.com' LIMIT 1")->fetch();
+        if (!$admin_check) {
+            $admin_hash = password_hash('Admin@123', PASSWORD_BCRYPT);
+            $seed_stmt = $pdo->prepare("
+                INSERT INTO `users` (`full_name`, `email`, `password`, `phone`, `role`) 
+                VALUES ('Clinic Admin', 'admin@clinic.com', ?, '03001239999', 'admin')
+            ");
+            $seed_stmt->execute([$admin_hash]);
+        } else {
+            // If admin exists but password needs to be verified/synced to Admin@123
+            if (!password_verify('Admin@123', $admin_check['password'])) {
+                $new_hash = password_hash('Admin@123', PASSWORD_BCRYPT);
+                $update_pwd = $pdo->prepare("UPDATE `users` SET `password` = ? WHERE `email` = 'admin@clinic.com'");
+                $update_pwd->execute([$new_hash]);
+            }
+        }
+    } catch (Exception $e) {
+        // Users table not yet created
+    }
 } catch (PDOException $e) {
     die("Database Connection Failed: " . htmlspecialchars($e->getMessage()));
 }
