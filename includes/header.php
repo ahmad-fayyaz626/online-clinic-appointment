@@ -32,8 +32,13 @@ $user = current_user();
                 <?php if (is_logged_in()): ?>
                     <?php if ($user['role'] === 'admin'): ?>
                         <li>
-                            <a href="admin_dashboard.php" class="nav-link <?php echo ($current_page === 'admin_dashboard.php' || strpos($current_page, 'admin_') === 0) ? 'active' : ''; ?>" id="nav-admin">
+                            <a href="admin_dashboard.php" class="nav-link <?php echo ($current_page === 'admin_dashboard.php') ? 'active' : ''; ?>" id="nav-admin">
                                 Admin Panel
+                            </a>
+                        </li>
+                        <li>
+                            <a href="admin_specialties.php" class="nav-link <?php echo ($current_page === 'admin_specialties.php') ? 'active' : ''; ?>" id="nav-admin-specialties">
+                                Specialties
                             </a>
                         </li>
                         <li>
