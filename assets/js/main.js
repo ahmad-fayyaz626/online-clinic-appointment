@@ -124,21 +124,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // 5. Password Show / Hide Toggle functionality
     const passwordToggleButtons = document.querySelectorAll('.password-toggle-btn');
     passwordToggleButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             const targetId = btn.getAttribute('data-target');
-            const input = document.getElementById(targetId);
-            if (!input) return;
-
-            const isPassword = input.type === 'password';
-            input.type = isPassword ? 'text' : 'password';
-
-            const eyeIcon = btn.querySelector('.icon-eye');
-            const eyeOffIcon = btn.querySelector('.icon-eye-off');
-            if (eyeIcon && eyeOffIcon) {
-                eyeIcon.style.display = isPassword ? 'none' : 'block';
-                eyeOffIcon.style.display = isPassword ? 'block' : 'none';
+            if (typeof togglePasswordVisibility === 'function') {
+                togglePasswordVisibility(targetId, btn);
             }
-            btn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
         });
     });
 });

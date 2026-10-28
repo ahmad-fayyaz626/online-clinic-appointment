@@ -243,7 +243,7 @@ require_once __DIR__ . '/includes/header.php';
                             class="form-control" 
                             placeholder="Enter new password if changing"
                         >
-                        <button type="button" class="password-toggle-btn" data-target="new_password" aria-label="Show password" tabindex="-1">
+                        <button type="button" class="password-toggle-btn" data-target="new_password" onclick="togglePasswordVisibility('new_password', this)" aria-label="Show password" title="Show password" tabindex="-1">
                             <svg class="icon-eye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                 <circle cx="12" cy="12" r="3"></circle>

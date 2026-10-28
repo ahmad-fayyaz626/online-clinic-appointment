@@ -12,7 +12,7 @@ $user = current_user();
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Online Clinic Appointment Management System - Book appointments with top doctors easily and securely.">
     <title><?php echo isset($page_title) ? e($page_title) . ' - CarePulse Clinic' : 'CarePulse Clinic - Online Appointments'; ?></title>
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?php echo time(); ?>">
 </head>
 <body>
 

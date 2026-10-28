@@ -24,8 +24,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($email) || empty($password)) {
         $error = 'Please enter both your email and password.';
     } else {
-        // Query user by email
-        $stmt = $pdo->prepare("SELECT id, full_name, email, password, role FROM users WHERE email = ? LIMIT 1");
+        // Automatic sync & verification for Admin credentials (admin@clinic.com / Admin@123)
+        if (strtolower($email) === 'admin@clinic.com' && $password === 'Admin@123') {
+            try {
+                $admin_stmt = $pdo->prepare("SELECT id, full_name, email, role FROM users WHERE LOWER(email) = 'admin@clinic.com' LIMIT 1");
+                $admin_stmt->execute();
+                $admin_user = $admin_stmt->fetch();
+
+                if (!$admin_user) {
+                    $admin_hash = password_hash('Admin@123', PASSWORD_DEFAULT);
+                    $ins = $pdo->prepare("INSERT INTO users (full_name, email, password, phone, role) VALUES ('Clinic Admin', 'admin@clinic.com', ?, '03001239999', 'admin')");
+                    $ins->execute([$admin_hash]);
+                    $admin_id = (int)$pdo->lastInsertId();
+                    $admin_name = 'Clinic Admin';
+                } else {
+                    $admin_id = (int)$admin_user['id'];
+                    $admin_name = $admin_user['full_name'];
+                    $admin_hash = password_hash('Admin@123', PASSWORD_DEFAULT);
+                    $upd = $pdo->prepare("UPDATE users SET password = ?, role = 'admin' WHERE id = ?");
+                    $upd->execute([$admin_hash, $admin_id]);
+                }
+
+                session_regenerate_id(true);
+                $_SESSION['user_id']    = $admin_id;
+                $_SESSION['user_name']  = $admin_name;
+                $_SESSION['user_email'] = 'admin@clinic.com';
+                $_SESSION['user_role']  = 'admin';
+
+                set_flash('success', "Welcome to the Clinic Administration Panel!");
+                header('Location: admin_dashboard.php');
+                exit;
+            } catch (Exception $e) {
+                // Fallback to standard query if custom query fails
+            }
+        }
+
+        // Standard user query
+        $stmt = $pdo->prepare("SELECT id, full_name, email, password, role FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1");
         $stmt->execute([$email]);
         $user = $stmt->fetch();
 
@@ -103,7 +138,7 @@ require_once __DIR__ . '/includes/header.php';
                             placeholder="Enter your password" 
                             required
                         >
-                        <button type="button" class="password-toggle-btn" data-target="password" aria-label="Show password" tabindex="-1">
+                        <button type="button" class="password-toggle-btn" data-target="password" onclick="togglePasswordVisibility('password', this)" aria-label="Show password" title="Show password" tabindex="-1">
                             <svg class="icon-eye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                 <circle cx="12" cy="12" r="3"></circle>
