@@ -26,6 +26,14 @@ $options = [
 
 try {
     $pdo = new PDO($dsn, $db_user, $db_pass, $options);
+} catch (PDOException $e) {
+    // Automatic fallback for Linux / WSL environment credentials
+    try {
+        $pdo = new PDO($dsn, 'clinic_user', 'apna_password', $options);
+    } catch (PDOException $e2) {
+        die("Database Connection Failed: " . htmlspecialchars($e->getMessage()));
+    }
+}
 
     // Auto-migration: ensure doctor_notes column exists on appointments
     try {
@@ -58,9 +66,6 @@ try {
     } catch (Exception $e) {
         // Users table not yet created
     }
-} catch (PDOException $e) {
-    die("Database Connection Failed: " . htmlspecialchars($e->getMessage()));
-}
 
 /**
  * Helper to safely escape HTML output

@@ -187,7 +187,10 @@ require_once __DIR__ . '/includes/header.php';
                             <?php endif; ?>
                         </td>
 
-                        <td style="text-align: right;">
+                        <td style="text-align: right; white-space: nowrap;">
+                            <a href="appointment_slip.php?id=<?php echo (int)$apt['appointment_id']; ?>" target="_blank" class="btn btn-outline btn-sm" style="margin-right: 6px;" title="View and print appointment receipt">
+                                🖨️ Slip
+                            </a>
                             <?php if ($apt['status'] === 'booked'): ?>
                                 <form action="cancel_appointment.php" method="POST" style="display: inline-block;" onsubmit="return confirm('Are you sure you want to cancel this appointment with <?php echo addslashes($apt['doctor_name']); ?>? The slot will be released.');">
                                     <input type="hidden" name="appointment_id" value="<?php echo (int)$apt['appointment_id']; ?>">
@@ -197,7 +200,7 @@ require_once __DIR__ . '/includes/header.php';
                                 </form>
                             <?php else: ?>
                                 <span style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">
-                                    Slot Released
+                                    <?php echo ($apt['status'] === 'completed') ? 'Visited' : 'Slot Released'; ?>
                                 </span>
                             <?php endif; ?>
                         </td>
