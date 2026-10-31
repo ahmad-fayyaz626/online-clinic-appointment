@@ -124,12 +124,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // 5. Password Show / Hide Toggle functionality
     const passwordToggleButtons = document.querySelectorAll('.password-toggle-btn');
     passwordToggleButtons.forEach(btn => {
+        if (btn.hasAttribute('onclick')) return; // Let inline handler take precedence
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
             const targetId = btn.getAttribute('data-target');
             if (typeof togglePasswordVisibility === 'function') {
-                togglePasswordVisibility(targetId, btn);
+                togglePasswordVisibility(targetId, btn, e);
             }
         });
     });

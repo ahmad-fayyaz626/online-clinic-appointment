@@ -41,6 +41,7 @@ $specialties = $pdo->query("SELECT id, name FROM specialties ORDER BY name ASC")
 
 $errors = [];
 $full_name        = $doctor['full_name'];
+$email            = $doctor['email'];
 $phone            = $doctor['phone'];
 $specialty_id     = (int)$doctor['specialty_id'];
 $qualification    = $doctor['qualification'];
@@ -49,6 +50,7 @@ $fee              = (float)$doctor['fee'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $full_name        = trim($_POST['full_name'] ?? '');
+    $email            = trim($_POST['email'] ?? '');
     $phone            = trim($_POST['phone'] ?? '');
     $specialty_id     = (int)($_POST['specialty_id'] ?? 0);
     $qualification    = trim($_POST['qualification'] ?? '');
@@ -59,6 +61,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Validation
     if (empty($full_name)) {
         $errors[] = 'Doctor full name is required.';
+    }
+    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'A valid email address is required.';
+    } else {
+        // Check if email is already taken by another account
+        $check_email = $pdo->prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id != ? LIMIT 1");
+        $check_email->execute([$email, $doctor['user_id']]);
+        if ($check_email->fetch()) {
+            $errors[] = 'This email address is already assigned to another account.';
+        }
     }
     if (empty($phone)) {
         $errors[] = 'Phone number is required.';
@@ -80,17 +92,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->beginTransaction();
 
-            // 1. Update users table
+            // 1. Update users table with updated email and optional new password
             if (!empty($new_password)) {
                 if (strlen($new_password) < 6) {
                     throw new Exception('New password must be at least 6 characters long.');
                 }
                 $hashed = password_hash($new_password, PASSWORD_DEFAULT);
-                $u_stmt = $pdo->prepare("UPDATE users SET full_name = ?, phone = ?, password = ? WHERE id = ?");
-                $u_stmt->execute([$full_name, $phone, $hashed, $doctor['user_id']]);
+                $u_stmt = $pdo->prepare("UPDATE users SET full_name = ?, email = ?, phone = ?, password = ? WHERE id = ?");
+                $u_stmt->execute([$full_name, $email, $phone, $hashed, $doctor['user_id']]);
             } else {
-                $u_stmt = $pdo->prepare("UPDATE users SET full_name = ?, phone = ? WHERE id = ?");
-                $u_stmt->execute([$full_name, $phone, $doctor['user_id']]);
+                $u_stmt = $pdo->prepare("UPDATE users SET full_name = ?, email = ?, phone = ? WHERE id = ?");
+                $u_stmt->execute([$full_name, $email, $phone, $doctor['user_id']]);
             }
 
             // 2. Update doctors table
@@ -103,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $pdo->commit();
 
-            set_flash('success', "Doctor {$full_name}'s profile updated successfully.");
+            set_flash('success', "Doctor {$full_name}'s credentials and profile updated successfully.");
             header('Location: admin_dashboard.php');
             exit;
         } catch (Exception $e) {
@@ -158,13 +170,14 @@ require_once __DIR__ . '/includes/header.php';
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                     <div class="form-group">
-                        <label class="form-label">Email (Read Only)</label>
+                        <label class="form-label" for="email">Doctor Email (Login Username)</label>
                         <input 
                             type="email" 
+                            id="email" 
+                            name="email" 
                             class="form-control" 
-                            value="<?php echo e($doctor['email']); ?>" 
-                            disabled 
-                            style="background-color: #f1f5f9; cursor: not-allowed;"
+                            value="<?php echo e($email); ?>" 
+                            required
                         >
                     </div>
 
@@ -243,7 +256,7 @@ require_once __DIR__ . '/includes/header.php';
                             class="form-control" 
                             placeholder="Enter new password if changing"
                         >
-                        <button type="button" class="password-toggle-btn" data-target="new_password" onclick="togglePasswordVisibility('new_password', this)" aria-label="Show password" title="Show password" tabindex="-1">
+                        <button type="button" class="password-toggle-btn" data-target="new_password" onclick="togglePasswordVisibility('new_password', this, event)" aria-label="Show password" title="Show password" tabindex="-1">
                             <svg class="icon-eye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                 <circle cx="12" cy="12" r="3"></circle>

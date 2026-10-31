@@ -23,13 +23,33 @@ The system is normalized across 4 relational tables:
 
 ---
 
-## Business Rules Implemented
+## Key Features Implemented
 
-1. **Patient Overlap Prevention:** A patient cannot book two appointments at the exact same date and time.
-2. **Doctor Double-Booking Prevention:** A doctor cannot have two active appointments at the same date and time slot.
-3. **Non-destructive Cancellation:** Cancelling an appointment updates its status to `cancelled` without deleting the record, immediately freeing the slot for other patients.
-4. **Ownership Verification:** Patients can only view and cancel their own appointments.
-5. **Session-Protected Routes:** Appointment booking and patient dashboard require verified session authentication.
+1. **Patient Portal:**
+   - Account signup and secure authentication with password visibility toggle.
+   - Doctor directory browsing with real-time specialty filtering.
+   - Appointment booking with AJAX live slot availability checking.
+   - Patient dashboard with status filters and non-destructive cancellation.
+   - Printable consultation slip / appointment receipt with clinic branding and token number.
+
+2. **Doctor Portal:**
+   - Independent doctor authentication and isolated doctor schedule view.
+   - Real-time statistics: Total Patients Seen, Today's Appointments, Booked, and Completed.
+   - Patient contact details (phone, email) and visit reasons.
+   - Consultation completion workflow with medical diagnosis and prescription recording.
+
+3. **Admin Management Panel:**
+   - Clinic-wide operational metrics: Active Doctors, Registered Patients, and Total Bookings.
+   - Doctor CRUD: Add new specialist (with automatic user creation in SQL transaction), edit profile/fees, and safe cascade deletion.
+   - Medical Specialties CRUD: Add, edit, and organize clinic departments.
+   - Master list of recent clinic appointments with statuses.
+
+4. **Security & Business Rules:**
+   - **Patient Overlap Prevention:** A patient cannot book two appointments at the exact same date and time.
+   - **Doctor Double-Booking Prevention:** A doctor cannot have two active appointments at the same time slot.
+   - **Data Privacy & Ownership Verification:** Doctors only see their own patients; patients only see and manage their own bookings.
+   - **Role-Based Access Control (RBAC):** Strict session validation protecting admin, doctor, and patient routes.
+   - **Password Security:** BCRYPT password hashing and protection against session fixation.
 
 ---
 

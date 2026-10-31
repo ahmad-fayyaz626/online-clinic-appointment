@@ -138,7 +138,7 @@ require_once __DIR__ . '/includes/header.php';
                             placeholder="Enter your password" 
                             required
                         >
-                        <button type="button" class="password-toggle-btn" data-target="password" onclick="togglePasswordVisibility('password', this)" aria-label="Show password" title="Show password" tabindex="-1">
+                        <button type="button" class="password-toggle-btn" data-target="password" onclick="togglePasswordVisibility('password', this, event)" aria-label="Show password" title="Show password" tabindex="-1">
                             <svg class="icon-eye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                 <circle cx="12" cy="12" r="3"></circle>

@@ -37,10 +37,21 @@ $password_errors = [];
 // Handle Profile Information Update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_profile') {
     $full_name = trim($_POST['full_name'] ?? '');
+    $email     = trim($_POST['email'] ?? '');
     $phone     = trim($_POST['phone'] ?? '');
 
     if (empty($full_name)) {
         $profile_errors[] = 'Full name is required.';
+    }
+    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $profile_errors[] = 'A valid email address is required.';
+    } else {
+        // Check if email is already taken by another account
+        $check_email = $pdo->prepare("SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id != ? LIMIT 1");
+        $check_email->execute([$email, $user_id]);
+        if ($check_email->fetch()) {
+            $profile_errors[] = 'This email address is already in use by another account.';
+        }
     }
     if (empty($phone)) {
         $profile_errors[] = 'Phone number is required.';
@@ -56,8 +67,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         try {
             $pdo->beginTransaction();
 
-            $update_stmt = $pdo->prepare("UPDATE users SET full_name = ?, phone = ? WHERE id = ?");
-            $update_stmt->execute([$full_name, $phone, $user_id]);
+            $update_stmt = $pdo->prepare("UPDATE users SET full_name = ?, email = ?, phone = ? WHERE id = ?");
+            $update_stmt->execute([$full_name, $email, $phone, $user_id]);
 
             if ($user_data['role'] === 'doctor' && $fee !== null) {
                 $doc_update = $pdo->prepare("UPDATE doctors SET fee = ? WHERE user_id = ?");
@@ -66,10 +77,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
             $pdo->commit();
 
-            // Refresh session name
-            $_SESSION['user_name'] = $full_name;
+            // Refresh session details
+            $_SESSION['user_name']  = $full_name;
+            $_SESSION['user_email'] = $email;
 
-            set_flash('success', 'Your profile details have been updated successfully.');
+            set_flash('success', 'Your profile details and email have been updated successfully.');
             header('Location: profile.php');
             exit;
         } catch (PDOException $e) {
@@ -182,15 +194,16 @@ require_once __DIR__ . '/includes/header.php';
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">Email Address (Read Only)</label>
+                        <label class="form-label" for="email">Email Address (Login Username)</label>
                         <input 
                             type="email" 
+                            id="email" 
+                            name="email" 
                             class="form-control" 
                             value="<?php echo e($user_data['email']); ?>" 
-                            disabled 
-                            style="background-color: #f1f5f9; cursor: not-allowed;"
+                            required
                         >
-                        <div class="form-text">Your email address is your unique system identifier and cannot be changed.</div>
+                        <div class="form-text">You can change your email address anytime. It is used to log in to your account.</div>
                     </div>
 
                     <?php if ($doctor_info): ?>
@@ -258,7 +271,7 @@ require_once __DIR__ . '/includes/header.php';
                                 placeholder="Enter current password" 
                                 required
                             >
-                            <button type="button" class="password-toggle-btn" data-target="current_password" onclick="togglePasswordVisibility('current_password', this)" aria-label="Show password" title="Show password" tabindex="-1">
+                            <button type="button" class="password-toggle-btn" data-target="current_password" onclick="togglePasswordVisibility('current_password', this, event)" aria-label="Show password" title="Show password" tabindex="-1">
                                 <svg class="icon-eye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                     <circle cx="12" cy="12" r="3"></circle>
@@ -283,7 +296,7 @@ require_once __DIR__ . '/includes/header.php';
                                     placeholder="Min 6 characters" 
                                     required
                                 >
-                                <button type="button" class="password-toggle-btn" data-target="new_password" onclick="togglePasswordVisibility('new_password', this)" aria-label="Show password" title="Show password" tabindex="-1">
+                                <button type="button" class="password-toggle-btn" data-target="new_password" onclick="togglePasswordVisibility('new_password', this, event)" aria-label="Show password" title="Show password" tabindex="-1">
                                     <svg class="icon-eye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path>
                                         <circle cx="12" cy="12" r="3"></circle>
@@ -307,7 +320,7 @@ require_once __DIR__ . '/includes/header.php';
                                     placeholder="Re-enter new password" 
                                     required
                                 >
-                                <button type="button" class="password-toggle-btn" data-target="confirm_password" onclick="togglePasswordVisibility('confirm_password', this)" aria-label="Show password" title="Show password" tabindex="-1">
+                                <button type="button" class="password-toggle-btn" data-target="confirm_password" onclick="togglePasswordVisibility('confirm_password', this, event)" aria-label="Show password" title="Show password" tabindex="-1">
                                     <svg class="icon-eye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path>
                                         <circle cx="12" cy="12" r="3"></circle>

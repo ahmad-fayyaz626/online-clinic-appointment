@@ -10,12 +10,20 @@
 
 <script>
 // Universal Password Show/Hide Toggle available across all pages
-function togglePasswordVisibility(targetId, btn) {
+function togglePasswordVisibility(targetId, btn, e) {
+    if (e) {
+        if (e.preventDefault) e.preventDefault();
+        if (e.stopPropagation) e.stopPropagation();
+        e.cancelBubble = true;
+    }
     var input = document.getElementById(targetId);
     if (!input) return;
 
-    var isPassword = input.getAttribute('type') === 'password';
-    input.setAttribute('type', isPassword ? 'text' : 'password');
+    var isPassword = (input.type === 'password' || input.getAttribute('type') === 'password');
+    var nextType = isPassword ? 'text' : 'password';
+
+    input.type = nextType;
+    input.setAttribute('type', nextType);
 
     if (btn) {
         var eyeIcon = btn.querySelector('.icon-eye');
@@ -29,15 +37,17 @@ function togglePasswordVisibility(targetId, btn) {
     }
 }
 
-// Global delegated event listener so dynamic and static toggle buttons work reliably
+// Global delegated event listener (safely avoids double-toggle if inline onclick exists)
 document.addEventListener('click', function(e) {
     var btn = e.target.closest('.password-toggle-btn');
     if (!btn) return;
+    if (btn.hasAttribute('onclick')) return; // Let inline onclick handle it safely
+
     e.preventDefault();
     e.stopPropagation();
     var targetId = btn.getAttribute('data-target');
     if (targetId) {
-        togglePasswordVisibility(targetId, btn);
+        togglePasswordVisibility(targetId, btn, e);
     }
 });
 </script>
