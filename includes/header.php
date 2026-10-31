@@ -32,7 +32,7 @@ $user = current_user();
                 <?php if (is_logged_in()): ?>
                     <?php if ($user['role'] === 'admin'): ?>
                         <li>
-                            <a href="admin_dashboard.php" class="nav-link <?php echo ($current_page === 'admin_dashboard.php') ? 'active' : ''; ?>" id="nav-admin">
+                            <a href="admin_dashboard.php" class="nav-link <?php echo ($current_page === 'admin_dashboard.php' || strpos($current_page, 'admin_doctor_') === 0) ? 'active' : ''; ?>" id="nav-admin">
                                 Admin Panel
                             </a>
                         </li>
@@ -42,13 +42,13 @@ $user = current_user();
                             </a>
                         </li>
                         <li>
-                            <a href="index.php" class="nav-link <?php echo ($current_page === 'index.php') ? 'active' : ''; ?>" id="nav-doctors">
-                                Doctors Directory
+                            <a href="index.php" class="nav-link <?php echo ($current_page === 'index.php') ? 'active' : ''; ?>" id="nav-doctors" title="Preview public doctor directory as seen by patients">
+                                Public Directory
                             </a>
                         </li>
                     <?php elseif ($user['role'] === 'doctor'): ?>
                         <li>
-                            <a href="doctor_dashboard.php" class="nav-link <?php echo ($current_page === 'doctor_dashboard.php') ? 'active' : ''; ?>" id="nav-doctor-schedule">
+                            <a href="doctor_dashboard.php" class="nav-link <?php echo ($current_page === 'doctor_dashboard.php' || $current_page === 'doctor_complete_appointment.php') ? 'active' : ''; ?>" id="nav-doctor-schedule">
                                 My Patients & Schedule
                             </a>
                         </li>

@@ -177,10 +177,8 @@ require_once __DIR__ . '/includes/header.php';
                             name="email" 
                             class="form-control" 
                             value="<?php echo e($email); ?>" 
-                            required
-                        >
-                    </div>
-
+                            required                            >
+                        </div>
                     <div class="form-group">
                         <label class="form-label" for="phone">Contact Phone</label>
                         <input 
