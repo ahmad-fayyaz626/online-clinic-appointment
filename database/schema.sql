@@ -93,3 +93,11 @@ ON DUPLICATE KEY UPDATE `full_name`=VALUES(`full_name`);
 INSERT INTO `users` (`id`, `full_name`, `email`, `password`, `phone`, `role`) VALUES
 (8, 'Clinic Admin', 'admin@clinic.com', '$2y$10$6FJ3nayJ3AVyKyBY81VtSe0jgMPYkOlX4.kJEXqj1IlsueYF/BUKq', '03001239999', 'admin')
 ON DUPLICATE KEY UPDATE `full_name`=VALUES(`full_name`);
+
+-- Sample Patient Appointments
+INSERT INTO `appointments` (`id`, `patient_id`, `doctor_id`, `appointment_date`, `appointment_time`, `status`, `reason`, `doctor_notes`, `created_at`) VALUES
+(1, 7, 1, CURDATE(), '10:00:00', 'booked', 'Routine cardiovascular health checkup and blood pressure monitoring.', NULL, NOW()),
+(2, 7, 3, DATE_SUB(CURDATE(), INTERVAL 3 DAY), '14:00:00', 'completed', 'Persistent migraine headaches and visual aura episodes.', 'Diagnosed with tension-triggered migraine. Prescribed Tab Rizatriptan 10mg PRN and Tab Magnesium 400mg daily. Advised adequate sleep and hydration.', DATE_SUB(NOW(), INTERVAL 3 DAY)),
+(3, 7, 2, DATE_ADD(CURDATE(), INTERVAL 2 DAY), '11:00:00', 'booked', 'Tooth sensitivity and routine dental scaling.', NULL, NOW()),
+(4, 7, 5, DATE_SUB(CURDATE(), INTERVAL 7 DAY), '15:00:00', 'cancelled', 'Allergic skin reaction consultation.', NULL, DATE_SUB(NOW(), INTERVAL 7 DAY))
+ON DUPLICATE KEY UPDATE `status`=VALUES(`status`);

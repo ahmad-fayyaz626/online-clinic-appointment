@@ -38,8 +38,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    // Business Rule 3: Cancel = status change, delete nahi.
-    // Row rehti hai, status 'cancelled' ho jata hai, aur wo slot dobara free ho jata hai.
+    // Business Rule 3: Non-destructive cancellation - updates status to 'cancelled' instead of deleting.
+    // The slot is immediately freed up for other patients while preserving clinical audit history.
     try {
         $update_stmt = $pdo->prepare("
             UPDATE appointments 
