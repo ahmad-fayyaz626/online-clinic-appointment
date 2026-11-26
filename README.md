@@ -2,11 +2,100 @@
 
 CarePulse is a PHP and MySQL/MariaDB clinic appointment system. Patients can find a doctor, book a consultation and open their appointment slip. Doctors manage their schedules and consultation notes, and admins manage doctors and specialties.
 
-## Run the published app with XAMPP
+## Local setup
 
-1. Place the project in `C:\xampp\htdocs\clinic` and start Apache and MySQL from the XAMPP Control Panel.
-2. Import [database/schema.sql](database/schema.sql) through phpMyAdmin. The published schema creates `clinic_db` and includes demo accounts. Use a fresh local database for the demo.
-3. Open [CarePulse on localhost](http://localhost/clinic/). If you use a custom database connection, check [.env.example](.env.example) for the supported settings.
+Choose [Windows with XAMPP](#windows-with-xampp) or [Ubuntu with Apache and MariaDB](#ubuntu-with-apache-and-mariadb). Both walkthroughs start with the published GitHub version and a fresh local database. If you already have a CarePulse database, back it up before importing anything.
+
+### Windows with XAMPP
+
+1. Install [XAMPP for Windows](https://www.apachefriends.org/download.html). Open the XAMPP Control Panel and start **Apache** and **MySQL**. Check that [XAMPP opens on localhost](http://localhost/). The control panel uses the MySQL label for its database service. [XAMPP Windows guide](https://www.apachefriends.org/faq_windows)
+2. Download the repository using **Code → Download ZIP** on GitHub. Extract it and place the project files in `C:\xampp\htdocs\clinic`. Confirm that the entry file is `C:\xampp\htdocs\clinic\index.php`.
+3. Open [phpMyAdmin](http://localhost/phpmyadmin/), select the **Import** tab on the server home page, and choose `C:\xampp\htdocs\clinic\database\schema.sql`. Click **Import**. The published schema creates `clinic_db` and adds demo data.
+4. Open [CarePulse](http://localhost/clinic/) and sign in with one of the [demo accounts](#demo-accounts).
+5. If your database uses a custom port or password, update `C:\xampp\htdocs\clinic\.env` using [.env.example](.env.example) for the setting names. Include Apache's port in the browser address if you changed it. For example, use `http://localhost:8080/clinic/` when Apache listens on port 8080.
+
+### Ubuntu with Apache and MariaDB
+
+1. Install Apache, PHP, the database driver and MariaDB. Run these commands in a terminal on the Ubuntu machine that will run the app. [Ubuntu PHP guide](https://ubuntu.com/server/docs/programming-php/) · [MariaDB installation guide](https://mariadb.com/docs/server/mariadb-quickstart-guides/installing-mariadb-server-guide)
+
+   ```bash
+   sudo apt update
+   sudo apt install git apache2 libapache2-mod-php php-cli php-mysql php-mbstring mariadb-server
+   sudo systemctl enable --now apache2 mariadb
+   ```
+
+2. Clone the repository and copy the published files into Apache’s default web directory.
+
+   ```bash
+   git clone https://github.com/ahmad-fayyaz626/online-clinic-appointment.git
+   sudo install -d -m 755 /var/www/html/clinic
+   git -C online-clinic-appointment archive HEAD | sudo tar -x -C /var/www/html/clinic
+   ```
+
+3. Import the schema as the database administrator, then open the MariaDB prompt to create a dedicated application account.
+
+   ```bash
+   sudo mariadb < /var/www/html/clinic/database/schema.sql
+   sudo mariadb
+   ```
+
+   Run these statements at the MariaDB prompt. Replace `YOUR_LOCAL_DB_PASSWORD` with a password you choose. Use the same password in step 4.
+
+   ```sql
+   CREATE USER 'carepulse'@'127.0.0.1' IDENTIFIED BY 'YOUR_LOCAL_DB_PASSWORD';
+   GRANT SELECT, INSERT, UPDATE, DELETE ON clinic_db.* TO 'carepulse'@'127.0.0.1';
+   EXIT;
+   ```
+
+4. Run `sudoedit /var/www/html/clinic/.env` and set the following values. Save the file, then restrict it so Apache can read it through the `www-data` group.
+
+   ```dotenv
+   DB_HOST=127.0.0.1
+   DB_PORT=3306
+   DB_NAME=clinic_db
+   DB_USER=carepulse
+   DB_PASS=YOUR_LOCAL_DB_PASSWORD
+   APP_ENV=development
+   ```
+
+   ```bash
+   sudo chown root:www-data /var/www/html/clinic/.env
+   sudo chmod 640 /var/www/html/clinic/.env
+   ```
+
+5. Run `sudoedit /etc/apache2/conf-available/carepulse.conf` and add this configuration for local browser access. [Ubuntu Apache guide](https://ubuntu.com/server/docs/how-to/web-services/install-apache2/)
+
+   ```apache
+   <Directory "/var/www/html/clinic">
+       Options -Indexes
+       AllowOverride All
+       Require local
+       <FilesMatch "(?i)^(\.env(\..*)?|.*\.sql)$">
+           Require all denied
+       </FilesMatch>
+   </Directory>
+   ```
+
+   Enable the configuration and reload Apache.
+
+   ```bash
+   sudo a2enmod rewrite
+   sudo a2enconf carepulse
+   sudo apache2ctl configtest
+   sudo systemctl reload apache2
+   ```
+
+6. Open [CarePulse](http://localhost/clinic/) in a browser on the Ubuntu machine and use a [demo account](#demo-accounts). If the app shows a connection error, use `systemctl status apache2 mariadb` to check both services and verify the values in `.env`.
+
+### Demo accounts
+
+These accounts are included in the published schema. Use them with local demo data.
+
+| Demo role | Email | Password |
+| --- | --- | --- |
+| Admin | `admin@clinic.com` | `Admin@123` |
+| Doctor | `sara.khan@clinic.com` | `Doctor@123` |
+| Patient | `ali@example.com` | `Patient@123` |
 
 ## Live queue update
 
@@ -48,18 +137,11 @@ The estimate adds the remaining time of any current consultation and the expecte
 
 ### Local setup for the live queue update
 
-Use PHP with `pdo_mysql` and `mbstring`, plus MySQL or MariaDB with InnoDB. XAMPP works for local development. The CLI server below is for trusted local use.
+Follow the operating system walkthrough above with the updated application files. Use these database import steps for this version.
 
-1. Create a database named `clinic_db` with `utf8mb4` and import [database/schema.sql](database/schema.sql) into it. In phpMyAdmin, select the database before importing.
-2. Configure the process environment using [.env.example](.env.example). The default XAMPP settings work locally with the app’s defaults. When using a different user or database, supply `DB_USER`, `DB_PASS`, and `DB_NAME`.
-3. Start Apache and open the project URL. For the local CLI server, run `php -S 127.0.0.1:8000` from the project root. Give PHP a writable session directory. Supply any credentials in environment variables when using the CLI server.
-4. For a local demo, import `database/demo.sql` after the schema into a fresh development database.
-
-| Demo role | Email | Password |
-| --- | --- | --- |
-| Admin | `admin@clinic.com` | `Admin@123` |
-| Doctor | `sara.khan@clinic.com` | `Doctor@123` |
-| Patient | `ali@example.com` | `Patient@123` |
+1. Create an empty database named `clinic_db` using `utf8mb4`. On Windows, create it from **New** in phpMyAdmin. On Ubuntu, run `sudo mariadb -e "CREATE DATABASE clinic_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"`.
+2. Import `database/schema.sql` into the selected database. On Ubuntu, run `sudo mariadb clinic_db < /var/www/html/clinic/database/schema.sql`.
+3. To load the demo accounts above, import `database/demo.sql` after the schema, using the same database. On Ubuntu, run `sudo mariadb clinic_db < /var/www/html/clinic/database/demo.sql`.
 
 To demo the live workflow, sign in to all three roles in separate browser profiles or browsers. Open the patient’s appointment slip for today, check in its token as admin, and start and finish the consultation as the doctor once the booked time has arrived.
 
