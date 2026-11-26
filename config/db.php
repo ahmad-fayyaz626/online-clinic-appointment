@@ -1,162 +1,188 @@
 <?php
-/**
- * Database Connection Configuration
- * Compatible with XAMPP (Windows) and LAMP (Linux)
- */
 
-// Start session if not already started and headers not sent
-if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
-    session_start();
-}
-
-// Load environment variables from .env file if it exists
-$env_file = __DIR__ . '/../.env';
-if (file_exists($env_file) && is_readable($env_file)) {
-    $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        $line = trim($line);
-        if ($line === '' || strpos($line, '#') === 0) continue;
-        if (strpos($line, '=') !== false) {
-            list($key, $value) = explode('=', $line, 2);
-            $key = trim($key);
-            $value = trim($value, " \t\n\r\0\x0B\"'");
-            putenv("{$key}={$value}");
-            $_ENV[$key] = $value;
-            $_SERVER[$key] = $value;
+$envFile = __DIR__ . '/../.env';
+if (is_readable($envFile)) {
+    foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        if (preg_match('/^([A-Z][A-Z_0-9]*)=(.*)$/', trim($line), $entry) && getenv($entry[1]) === false) {
+            $value = trim($entry[2]);
+            if (strlen($value) >= 2 && ($value[0] === '"' || $value[0] === "'") && $value[0] === substr($value, -1)) {
+                $value = substr($value, 1, -1);
+            }
+            putenv($entry[1] . '=' . $value);
         }
     }
 }
 
-// Database credentials (with fallback defaults)
-$db_host = getenv('DB_HOST') ?: '127.0.0.1';
-$db_name = getenv('DB_NAME') ?: 'clinic_db';
-$db_user = getenv('DB_USER') ?: 'root';
-$db_pass = getenv('DB_PASS') !== false ? getenv('DB_PASS') : '';
-$db_port = getenv('DB_PORT') ?: '3306';
+$production = getenv('APP_ENV') === 'production';
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+date_default_timezone_set(getenv('CLINIC_TIMEZONE') ?: 'Asia/Karachi');
 
-$dsn = "mysql:host={$db_host};port={$db_port};dbname={$db_name};charset=utf8mb4";
+function report_app_error(Throwable $error): void
+{
+    error_log(sprintf('CarePulse %s (%s) in %s:%d', get_class($error), $error->getCode(),
+        basename($error->getFile()), $error->getLine()));
+}
 
-$options = [
-    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    PDO::ATTR_EMULATE_PREPARES   => false,
-];
+if (PHP_SAPI !== 'cli') {
+    set_exception_handler(function (Throwable $error): void {
+        report_app_error($error);
+        http_response_code(500);
+        echo 'CarePulse encountered a problem. Please try again.';
+    });
+
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
+    session_set_cookie_params([
+        'httponly' => true,
+        'secure' => $production || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        'samesite' => 'Lax',
+    ]);
+    if (!session_start()) {
+        http_response_code(503);
+        exit('CarePulse cannot start a session right now. Please try again shortly.');
+    }
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: same-origin');
+    header('X-Frame-Options: DENY');
+    header('Cache-Control: private, no-store');
+
+    // Every browser POST in CarePulse uses a same-session request token.
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+        && (!is_string($_POST['csrf_token'] ?? null)
+            || !isset($_SESSION['csrf_token'])
+            || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token']))) {
+        http_response_code(403);
+        exit('This form has expired. Go back, refresh the page and try again.');
+    }
+}
+
+$dbHost = getenv('DB_HOST') ?: '127.0.0.1';
+$dbName = getenv('DB_NAME') ?: 'clinic_db';
+$dbPort = getenv('DB_PORT') ?: '3306';
+$dbUser = getenv('DB_USER');
+$dbPassword = getenv('DB_PASS');
+if ($production && (!$dbUser || $dbUser === 'root' || $dbPassword === false || $dbPassword === '')) {
+    throw new RuntimeException('Configure a dedicated database account for production.');
+}
 
 try {
-    $pdo = new PDO($dsn, $db_user, $db_pass, $options);
-} catch (PDOException $e) {
-    // Automatic fallback for Linux / WSL environment credentials
-    try {
-        $pdo = new PDO($dsn, 'clinic_user', 'apna_password', $options);
-    } catch (PDOException $e2) {
-        die("Database Connection Failed: " . htmlspecialchars($e->getMessage()));
+    $pdo = new PDO(
+        "mysql:host={$dbHost};port={$dbPort};dbname={$dbName};charset=utf8mb4",
+        $dbUser ?: 'root',
+        $dbPassword === false ? '' : $dbPassword,
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+            PDO::MYSQL_ATTR_INIT_COMMAND => 'SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ',
+        ]
+    );
+} catch (PDOException $error) {
+    if (PHP_SAPI === 'cli') {
+        throw $error;
+    }
+    report_app_error($error);
+    http_response_code(503);
+    exit('CarePulse is temporarily unavailable. Please try again shortly.');
+}
+
+if (!empty($_SESSION['user_id'])) {
+    $account = $pdo->prepare('SELECT role, password FROM users WHERE id = ?');
+    $account->execute([$_SESSION['user_id']]);
+    $record = $account->fetch();
+    if (!$record || $record['role'] !== ($_SESSION['user_role'] ?? null)
+        || !hash_equals(hash('sha256', $record['password']), $_SESSION['auth_version'] ?? '')) {
+        $_SESSION = [];
+        session_regenerate_id(true);
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+            http_response_code(403);
+            exit('Your session has changed. Sign in again and retry.');
+        }
     }
 }
 
-    // Auto-migration: ensure doctor_notes column exists on appointments
-    try {
-        $col_check = $pdo->query("SHOW COLUMNS FROM `appointments` LIKE 'doctor_notes'")->fetch();
-        if (!$col_check) {
-            $pdo->exec("ALTER TABLE `appointments` ADD COLUMN `doctor_notes` TEXT DEFAULT NULL AFTER `reason`");
-        }
-    } catch (Exception $e) {
-        // Table not yet created or permissions restricted
-    }
-
-    // Auto-seed: ensure administrator account exists
-    try {
-        $admin_check = $pdo->query("SELECT id, password FROM `users` WHERE `email` = 'admin@clinic.com' LIMIT 1")->fetch();
-        if (!$admin_check) {
-            $admin_hash = password_hash('Admin@123', PASSWORD_BCRYPT);
-            $seed_stmt = $pdo->prepare("
-                INSERT INTO `users` (`full_name`, `email`, `password`, `phone`, `role`) 
-                VALUES ('Clinic Admin', 'admin@clinic.com', ?, '03001239999', 'admin')
-            ");
-            $seed_stmt->execute([$admin_hash]);
-        } else {
-            // If admin exists but password needs to be verified/synced to Admin@123
-            if (!password_verify('Admin@123', $admin_check['password'])) {
-                $new_hash = password_hash('Admin@123', PASSWORD_BCRYPT);
-                $update_pwd = $pdo->prepare("UPDATE `users` SET `password` = ? WHERE `email` = 'admin@clinic.com'");
-                $update_pwd->execute([$new_hash]);
-            }
-        }
-    } catch (Exception $e) {
-        // Users table not yet created
-    }
-
-/**
- * Helper to safely escape HTML output
- */
-function e($value) {
-    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+function e($value): string
+{
+    return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
-/**
- * Flash message helpers
- */
-function set_flash($type, $message) {
+function new_password_is_valid($password): bool
+{
+    return is_string($password) && mb_strlen($password) >= 12 && strlen($password) <= 72
+        && !str_contains($password, chr(0));
+}
+
+function csrf_field(): string
+{
+    $_SESSION['csrf_token'] ??= bin2hex(random_bytes(32));
+    return '<input type="hidden" name="csrf_token" value="' . e($_SESSION['csrf_token']) . '">';
+}
+
+function set_flash($type, $message): void
+{
     $_SESSION['flash'][$type] = $message;
 }
 
-function get_flash($type) {
-    if (isset($_SESSION['flash'][$type])) {
-        $msg = $_SESSION['flash'][$type];
-        unset($_SESSION['flash'][$type]);
-        return $msg;
-    }
-    return null;
+function get_flash($type)
+{
+    $message = $_SESSION['flash'][$type] ?? null;
+    unset($_SESSION['flash'][$type]);
+    return $message;
 }
 
-/**
- * Auth helper functions
- */
-function is_logged_in() {
-    return isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
+function is_logged_in(): bool
+{
+    return !empty($_SESSION['user_id']);
 }
 
-function current_user() {
+function current_user(): ?array
+{
     if (!is_logged_in()) {
         return null;
     }
     return [
-        'id'    => $_SESSION['user_id'],
-        'name'  => $_SESSION['user_name'] ?? '',
-        'email' => $_SESSION['user_email'] ?? '',
-        'role'  => $_SESSION['user_role'] ?? 'patient'
+        'id' => (int)$_SESSION['user_id'],
+        'name' => $_SESSION['user_name'],
+        'email' => $_SESSION['user_email'],
+        'role' => $_SESSION['user_role'],
     ];
 }
 
-function require_login() {
+function require_login(): void
+{
     if (!is_logged_in()) {
-        set_flash('error', 'Please login to access this page.');
+        set_flash('error', 'Please sign in to access this page.');
         header('Location: login.php');
         exit;
     }
 }
 
-function is_doctor() {
-    return is_logged_in() && ($_SESSION['user_role'] ?? '') === 'doctor';
-}
-
-function is_admin() {
-    return is_logged_in() && ($_SESSION['user_role'] ?? '') === 'admin';
-}
-
-function require_doctor() {
+function require_role(string $role): void
+{
     require_login();
-    if (!is_doctor()) {
-        set_flash('error', 'Access restricted to medical doctors only.');
-        header('Location: index.php');
-        exit;
+    if ($_SESSION['user_role'] !== $role) {
+        http_response_code(403);
+        exit('This page is unavailable for your account.');
     }
 }
 
-function require_admin() {
-    require_login();
-    if (!is_admin()) {
-        set_flash('error', 'Access restricted to clinic administrators only.');
-        header('Location: index.php');
-        exit;
-    }
+function is_doctor(): bool
+{
+    return is_logged_in() && $_SESSION['user_role'] === 'doctor';
+}
+
+function is_admin(): bool
+{
+    return is_logged_in() && $_SESSION['user_role'] === 'admin';
+}
+
+function require_doctor(): void
+{
+    require_role('doctor');
+}
+
+function require_admin(): void
+{
+    require_role('admin');
 }
