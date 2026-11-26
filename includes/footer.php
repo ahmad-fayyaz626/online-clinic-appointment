@@ -1,10 +1,36 @@
     </div><!-- /.container -->
 </main><!-- /.main-content -->
 
-<footer class="site-footer">
+<footer class="clinic-footer">
     <div class="container">
-        <p>&copy; <?php echo date('Y'); ?> CarePulse Clinic Management System. All rights reserved.</p>
-        <p style="margin-top: 4px; font-size: 0.8rem; color: #94a3b8;">Secure Online Patient Appointment Booking &middot; 3-Tier Architecture</p>
+        <div class="clinic-footer-grid">
+            <div class="clinic-footer-brand">
+                <a href="index.php" class="brand-logo">
+                    <span class="logo-badge" aria-hidden="true">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    </span>
+                    <span class="brand-text">CarePulse <span>Clinic</span></span>
+                </a>
+                <p>Appointments, reception check-in and live queue updates.</p>
+            </div>
+            <nav aria-label="Footer navigation">
+                <h2><?= $role === 'admin' || $role === 'doctor' ? 'Clinic workspace' : 'Appointments' ?></h2>
+                <ul>
+                    <?php foreach ($portalLinks as $href => $label): ?>
+                        <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
+                    <?php endforeach; ?>
+                </ul>
+            </nav>
+            <div class="clinic-footer-help">
+                <h2>On the day of your visit</h2>
+                <p>Bring your appointment token and give it to reception when you arrive.</p>
+                <a href="index.php#visiting">How check-in works</a>
+            </div>
+        </div>
+        <div class="clinic-footer-base">
+            <span>&copy; <?= date('Y') ?> CarePulse Clinic</span>
+            <a href="#main-content">Back to top <span aria-hidden="true">&uarr;</span></a>
+        </div>
     </div>
 </footer>
 
@@ -51,6 +77,6 @@ document.addEventListener('click', function(e) {
     }
 });
 </script>
-<script src="assets/js/main.js?v=<?php echo time(); ?>"></script>
+<script src="assets/js/main.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/main.js'); ?>"></script>
 </body>
 </html>

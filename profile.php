@@ -88,7 +88,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            $profile_errors[] = 'Database error updating profile: ' . $e->getMessage();
+            report_app_error($e);
+            $profile_errors[] = 'Unable to save changes right now. Please try again.';
         }
     }
 }
@@ -105,8 +106,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $password_errors[] = 'Your current password is incorrect.';
     }
 
-    if (empty($new_password) || strlen($new_password) < 6) {
-        $password_errors[] = 'New password must be at least 6 characters long.';
+    if (empty($new_password) || !new_password_is_valid($new_password)) {
+        $password_errors[] = 'Use at least 12 characters and at most 72 bytes for the new password.';
     }
 
     if ($new_password !== $confirm_password) {
@@ -119,11 +120,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $pwd_stmt = $pdo->prepare("UPDATE users SET password = ? WHERE id = ?");
             $pwd_stmt->execute([$hashed, $user_id]);
 
+            session_regenerate_id(true);
+            $_SESSION['auth_version'] = hash('sha256', $hashed);
             set_flash('success', 'Password changed successfully! Please keep your new password safe.');
             header('Location: profile.php');
             exit;
         } catch (PDOException $e) {
-            $password_errors[] = 'Database error changing password: ' . $e->getMessage();
+            report_app_error($e);
+            $password_errors[] = 'Unable to save changes right now. Please try again.';
         }
     }
 }
@@ -165,6 +169,7 @@ require_once __DIR__ . '/includes/header.php';
                 <?php endif; ?>
 
                 <form action="profile.php" method="POST" id="profile-info-form">
+                    <?= csrf_field() ?>
                     <input type="hidden" name="action" value="update_profile">
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
@@ -258,6 +263,7 @@ require_once __DIR__ . '/includes/header.php';
                 <?php endif; ?>
 
                 <form action="profile.php" method="POST" id="change-password-form">
+                    <?= csrf_field() ?>
                     <input type="hidden" name="action" value="change_password">
 
                     <div class="form-group">
@@ -293,7 +299,7 @@ require_once __DIR__ . '/includes/header.php';
                                     id="new_password" 
                                     name="new_password" 
                                     class="form-control" 
-                                    placeholder="Min 6 characters" 
+                                    placeholder="At least 12 characters"
                                     required
                                 >
                                 <button type="button" class="password-toggle-btn" data-target="new_password" onclick="togglePasswordVisibility('new_password', this, event)" aria-label="Show password" title="Show password" tabindex="-1">

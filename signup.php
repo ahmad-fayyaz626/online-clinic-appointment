@@ -40,8 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (empty($password)) {
         $errors[] = 'Password is required.';
-    } elseif (strlen($password) < 6) {
-        $errors[] = 'Password must be at least 6 characters long.';
+    } elseif (!new_password_is_valid($password)) {
+        $errors[] = 'Use at least 12 characters and at most 72 bytes for the password.';
     }
 
     if ($password !== $confirm_p) {
@@ -71,7 +71,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: login.php');
             exit;
         } catch (PDOException $e) {
-            $errors[] = 'Database error during registration: ' . $e->getMessage();
+            report_app_error($e);
+            $errors[] = 'Unable to save changes right now. Please try again.';
         }
     }
 }
@@ -99,6 +100,7 @@ require_once __DIR__ . '/includes/header.php';
             <?php endif; ?>
 
             <form action="signup.php" method="POST" novalidate id="signup-form">
+                <?= csrf_field() ?>
                 <div class="form-group">
                     <label class="form-label" for="full_name">Full Name</label>
                     <input 
@@ -146,7 +148,7 @@ require_once __DIR__ . '/includes/header.php';
                             id="password" 
                             name="password" 
                             class="form-control" 
-                            placeholder="Minimum 6 characters" 
+                            placeholder="At least 12 characters"
                             required
                         >
                         <button type="button" class="password-toggle-btn" data-target="password" onclick="togglePasswordVisibility('password', this, event)" aria-label="Show password" title="Show password" tabindex="-1">

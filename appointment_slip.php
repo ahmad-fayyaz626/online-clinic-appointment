@@ -3,6 +3,7 @@ require_once __DIR__ . '/config/db.php';
 
 // Authentication required
 require_login();
+require_once __DIR__ . '/includes/clinic_queue.php';
 
 $appointment_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if ($appointment_id <= 0) {
@@ -72,7 +73,7 @@ if (!$is_authorized) {
 $time_obj = DateTime::createFromFormat('H:i:s', $apt['appointment_time']);
 $formatted_time = $time_obj ? $time_obj->format('g:i A') : $apt['appointment_time'];
 $formatted_date = date('l, d F Y', strtotime($apt['appointment_date']));
-$slip_token     = 'CP-' . str_pad($apt['appointment_id'], 6, '0', STR_PAD_LEFT);
+$slip_token = ClinicQueue::token((int)$apt['appointment_id']);
 
 $page_title = "Appointment Slip #{$slip_token}";
 ?>
@@ -248,7 +249,7 @@ $page_title = "Appointment Slip #{$slip_token}";
                     <?php elseif ($apt['status'] === 'completed'): ?>
                         <span class="badge badge-completed">Completed</span>
                     <?php else: ?>
-                        <span class="badge badge-cancelled">Cancelled</span>
+                        <span class="badge badge-cancelled"><?= $apt['status'] === 'no_show' ? 'Missed' : 'Cancelled' ?></span>
                     <?php endif; ?>
                 </td>
                 <td style="padding: 14px 16px; text-align: right; font-size: 1.05rem; font-weight: 800; color: var(--primary);">
@@ -259,7 +260,7 @@ $page_title = "Appointment Slip #{$slip_token}";
     </div>
 
     <!-- Visit Reason -->
-    <?php if (!empty($apt['reason'])): ?>
+    <?php if ($user_role !== 'admin' && !empty($apt['reason'])): ?>
         <div style="margin-bottom: 20px;">
             <div class="slip-section-title">Patient Reason for Visit</div>
             <div style="background: #ffffff; border: 1px dashed var(--border); padding: 12px 16px; border-radius: var(--radius-md); font-size: 0.9rem; color: var(--text-secondary);">
@@ -269,7 +270,7 @@ $page_title = "Appointment Slip #{$slip_token}";
     <?php endif; ?>
 
     <!-- Clinical Prescription & Doctor Remarks (If completed) -->
-    <?php if ($apt['status'] === 'completed' && !empty($apt['doctor_notes'])): ?>
+    <?php if ($user_role !== 'admin' && $apt['status'] === 'completed' && !empty($apt['doctor_notes'])): ?>
         <div style="margin-bottom: 28px;">
             <div class="slip-section-title" style="color: #059669;">📋 Doctor's Clinical Diagnosis & Prescription</div>
             <div style="background: #f0fdf4; border: 1.5px solid #a7f3d0; padding: 16px; border-radius: var(--radius-md); font-size: 0.92rem; color: #166534; line-height: 1.6;">
@@ -282,7 +283,7 @@ $page_title = "Appointment Slip #{$slip_token}";
     <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border);">
         <div style="font-size: 0.8rem; color: var(--text-muted); max-width: 380px;">
             * Please arrive 10 minutes prior to your designated consultation time.<br>
-            * Present this slip or token number at the reception desk upon arrival.
+            * Give this token to reception when you arrive, then follow your turn in My Appointments.
         </div>
         <div style="text-align: center;">
             <div style="border-bottom: 1px solid #0f172a; width: 170px; margin-bottom: 6px;"></div>

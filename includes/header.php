@@ -4,119 +4,66 @@ require_once __DIR__ . '/../config/db.php';
 
 $current_page = basename($_SERVER['PHP_SELF']);
 $user = current_user();
+$role = $user['role'] ?? 'guest';
+$portalLinks = [
+    'admin' => ['admin_dashboard.php' => 'Clinic operations', 'admin_specialties.php' => 'Specialties', 'index.php' => 'Doctor directory'],
+    'doctor' => ['doctor_dashboard.php' => 'My schedule', 'index.php' => 'Doctor directory'],
+    'patient' => ['index.php' => 'Find a doctor', 'dashboard.php' => 'My appointments'],
+    'guest' => ['index.php' => 'Find a doctor', 'index.php#visiting' => 'Your visit'],
+][$role];
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Online Clinic Appointment Management System - Book appointments with top doctors easily and securely.">
-    <title><?php echo isset($page_title) ? e($page_title) . ' - CarePulse Clinic' : 'CarePulse Clinic - Online Appointments'; ?></title>
-    <link rel="stylesheet" href="assets/css/style.css?v=<?php echo time(); ?>">
+    <meta name="theme-color" content="#f8fbfa">
+    <meta name="description" content="Find a doctor, book a consultation and follow your appointment at CarePulse Clinic.">
+    <title><?= isset($page_title) ? e($page_title) . ' | CarePulse Clinic' : 'CarePulse Clinic' ?></title>
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= filemtime(__DIR__ . '/../assets/css/style.css') ?>">
+    <link rel="stylesheet" href="assets/css/clinic.css?v=<?= filemtime(__DIR__ . '/../assets/css/clinic.css') ?>">
 </head>
-<body>
-
-<header class="site-header">
-    <div class="container">
-        <nav class="navbar">
-            <a href="index.php" class="brand-logo" id="brand-logo">
-                <div class="logo-badge">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                    </svg>
-                </div>
-                <div class="brand-text">CarePulse <span>Clinic</span></div>
-            </a>
-
-            <ul class="nav-links">
-                <?php if (is_logged_in()): ?>
-                    <?php if ($user['role'] === 'admin'): ?>
-                        <li>
-                            <a href="admin_dashboard.php" class="nav-link <?php echo ($current_page === 'admin_dashboard.php' || strpos($current_page, 'admin_doctor_') === 0) ? 'active' : ''; ?>" id="nav-admin">
-                                Admin Panel
-                            </a>
-                        </li>
-                        <li>
-                            <a href="admin_specialties.php" class="nav-link <?php echo ($current_page === 'admin_specialties.php') ? 'active' : ''; ?>" id="nav-admin-specialties">
-                                Specialties
-                            </a>
-                        </li>
-                        <li>
-                            <a href="index.php" class="nav-link <?php echo ($current_page === 'index.php') ? 'active' : ''; ?>" id="nav-doctors" title="Preview public doctor directory as seen by patients">
-                                Public Directory
-                            </a>
-                        </li>
-                    <?php elseif ($user['role'] === 'doctor'): ?>
-                        <li>
-                            <a href="doctor_dashboard.php" class="nav-link <?php echo ($current_page === 'doctor_dashboard.php' || $current_page === 'doctor_complete_appointment.php') ? 'active' : ''; ?>" id="nav-doctor-schedule">
-                                My Patients & Schedule
-                            </a>
-                        </li>
-                        <li>
-                            <a href="index.php" class="nav-link <?php echo ($current_page === 'index.php') ? 'active' : ''; ?>" id="nav-doctors">
-                                Doctors Directory
-                            </a>
-                        </li>
-                    <?php else: ?>
-                        <li>
-                            <a href="index.php" class="nav-link <?php echo ($current_page === 'index.php') ? 'active' : ''; ?>" id="nav-doctors">
-                                Doctors
-                            </a>
-                        </li>
-                        <li>
-                            <a href="dashboard.php" class="nav-link <?php echo ($current_page === 'dashboard.php') ? 'active' : ''; ?>" id="nav-appointments">
-                                My Appointments
-                            </a>
-                        </li>
-                    <?php endif; ?>
-
-                    <li class="user-badge" id="user-badge">
-                        <a href="profile.php" style="display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none;" title="Edit Profile & Settings">
-                            <span class="user-avatar-initial"><?php echo strtoupper(substr($user['name'], 0, 1)); ?></span>
-                            <span>
-                                <?php 
-                                if ($user['role'] === 'admin') {
-                                    echo 'Admin: ' . e($user['name']);
-                                } else {
-                                    echo e($user['name']);
-                                }
-                                ?>
-                            </span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="profile.php" class="nav-link <?php echo ($current_page === 'profile.php') ? 'active' : ''; ?>" id="nav-profile">
-                            Profile
-                        </a>
-                    </li>
-                    <li>
-                        <a href="logout.php" class="btn btn-outline btn-sm" id="btn-logout">
-                            Logout
-                        </a>
-                    </li>
-                <?php else: ?>
-                    <li>
-                        <a href="index.php" class="nav-link <?php echo ($current_page === 'index.php') ? 'active' : ''; ?>" id="nav-doctors">
-                            Doctors
-                        </a>
-                    </li>
-                    <li>
-                        <a href="login.php" class="nav-link <?php echo ($current_page === 'login.php') ? 'active' : ''; ?>" id="nav-login">
-                            Login
-                        </a>
-                    </li>
-                    <li>
-                        <a href="signup.php" class="btn btn-primary btn-sm" id="nav-signup">
-                            Create Account
-                        </a>
-                    </li>
-                <?php endif; ?>
+<body class="clinic-<?= e($role) ?>">
+<a class="clinic-skip" href="#main-content">Skip to main content</a>
+<header class="clinic-header" data-clinic-header>
+    <div class="container clinic-bar">
+        <a href="index.php" class="brand-logo clinic-brand" id="brand-logo">
+            <span class="logo-badge" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            </span>
+            <span class="brand-text">CarePulse <span>Clinic</span></span>
+        </a>
+        <button class="clinic-menu-toggle" type="button" aria-expanded="false" aria-controls="clinic-navigation" data-menu-toggle hidden>
+            <span class="clinic-menu-icon" aria-hidden="true"></span><span>Menu</span>
+        </button>
+        <nav id="clinic-navigation" class="clinic-navigation" aria-label="Main navigation">
+            <ul class="clinic-nav-links">
+                <?php foreach ($portalLinks as $href => $label): ?>
+                    <?php $active = $current_page === $href
+                        || ($href === 'admin_dashboard.php' && strpos($current_page, 'admin_doctor_') === 0)
+                        || ($href === 'doctor_dashboard.php' && $current_page === 'doctor_complete_appointment.php'); ?>
+                    <li><a class="clinic-nav-link<?= $active ? ' active' : '' ?>" href="<?= e($href) ?>"<?= $current_page === $href ? ' aria-current="page"' : '' ?>><?= e($label) ?></a></li>
+                <?php endforeach; ?>
             </ul>
+            <div class="clinic-account">
+                <?php if ($user): ?>
+                    <a class="clinic-account-link<?= $current_page === 'profile.php' ? ' active' : '' ?>" href="profile.php"<?= $current_page === 'profile.php' ? ' aria-current="page"' : '' ?>>
+                        <span class="clinic-initial" aria-hidden="true"><?= e(mb_strtoupper(mb_substr($user['name'], 0, 1))) ?></span>
+                        <span>Profile</span>
+                    </a>
+                    <form action="logout.php" method="post">
+                        <?= csrf_field() ?>
+                        <button type="submit" class="btn btn-outline btn-sm" id="btn-logout">Sign out</button>
+                    </form>
+                <?php else: ?>
+                    <a class="clinic-nav-link<?= $current_page === 'login.php' ? ' active' : '' ?>" href="login.php"<?= $current_page === 'login.php' ? ' aria-current="page"' : '' ?>>Sign in</a>
+                    <a href="signup.php" class="btn btn-primary"<?= $current_page === 'signup.php' ? ' aria-current="page"' : '' ?>>Create account</a>
+                <?php endif; ?>
+            </div>
         </nav>
     </div>
 </header>
-
-<main class="main-content">
+<main class="main-content" id="main-content" tabindex="-1">
     <div class="container">
         <?php
         // Display flash messages if any exist

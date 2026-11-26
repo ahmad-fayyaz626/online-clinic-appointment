@@ -6,15 +6,13 @@ $specialties_stmt = $pdo->query("SELECT id, name FROM specialties ORDER BY name 
 $all_specialties = $specialties_stmt->fetchAll();
 
 // Handle search and filtering
-$selected_specialty = isset($_GET['specialty']) ? (int)$_GET['specialty'] : 0;
-$search_query = isset($_GET['q']) ? trim($_GET['q']) : '';
+$selected_specialty = filter_input(INPUT_GET, 'specialty', FILTER_VALIDATE_INT) ?: 0;
+$search_query = is_string($_GET['q'] ?? null) ? trim(mb_substr($_GET['q'], 0, 100)) : '';
 
 $sql = "
     SELECT 
         d.id AS doctor_id,
         u.full_name AS doctor_name,
-        u.email AS doctor_email,
-        u.phone AS doctor_phone,
         s.id AS specialty_id,
         s.name AS specialty_name,
         d.qualification,
@@ -47,90 +45,66 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $doctors = $stmt->fetchAll();
 
-$page_title = 'Find Specialists & Book Appointment';
+$page_title = 'Find Specialists & Book appointment';
 require_once __DIR__ . '/includes/header.php';
 ?>
 
-<!-- Hero Section -->
-<section class="page-hero">
-    <div class="container">
-        <div class="hero-content">
-            <h1 class="hero-title">Quality Medical Care, Scheduled at Your Convenience</h1>
-            <p class="hero-subtitle">
-                Browse our experienced medical specialists, choose an available time slot, and book your verified appointment without any waiting queues.
-            </p>
-            <?php if (!is_logged_in()): ?>
-                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                    <a href="signup.php" class="btn btn-primary" id="hero-register-btn">Create Patient Account</a>
-                    <a href="login.php" class="btn btn-outline" style="color: white; border-color: rgba(255,255,255,0.3);" id="hero-login-btn">Sign In</a>
-                </div>
+<section class="clinic-hero" aria-labelledby="clinic-hero-title">
+    <div class="clinic-hero-copy">
+        <h1 id="clinic-hero-title">Find a doctor.<br>Plan your visit.</h1>
+        <p>Book a consultation and follow your place in the queue after checking in at reception.</p>
+        <div class="clinic-hero-actions">
+            <a href="#doctor-directory" class="btn btn-primary">Find a doctor <span aria-hidden="true">&darr;</span></a>
+            <?php if ($role === 'patient'): ?>
+                <a href="dashboard.php" class="btn btn-outline">My appointments</a>
+            <?php elseif ($role === 'doctor' || $role === 'admin'): ?>
+                <a href="<?= $role === 'doctor' ? 'doctor_dashboard.php' : 'admin_dashboard.php' ?>" class="btn btn-outline">Open workspace</a>
             <?php else: ?>
-                <a href="dashboard.php" class="btn btn-primary" id="hero-dashboard-btn">
-                    View My Appointments
-                </a>
+                <a href="#visiting" class="btn btn-outline">How visits work</a>
             <?php endif; ?>
         </div>
     </div>
+    <img class="clinic-hero-photo" src="assets/images/clinic-reception-1200.jpg"
+         srcset="assets/images/clinic-reception-640.jpg 640w, assets/images/clinic-reception-1200.jpg 1200w"
+         sizes="(max-width: 720px) 100vw, (max-width: 1200px) 55vw, 655px"
+         width="1200" height="675" alt="" fetchpriority="high">
 </section>
 
-<!-- Filter and Search Bar -->
-<div class="filter-bar">
-    <form action="index.php" method="GET" class="filter-group" style="width: 100%; display: flex; flex-wrap: wrap; gap: 14px;">
-        <div style="flex: 2; min-width: 220px;">
-            <input 
-                type="text" 
-                name="q" 
-                class="form-control" 
-                placeholder="Search by doctor name, specialty, or qualification..." 
-                value="<?php echo e($search_query); ?>"
-                id="search-input"
-            >
+<section class="clinic-directory" id="doctor-directory" aria-labelledby="directory-title">
+    <div class="clinic-directory-heading">
+        <div>
+            <h2 id="directory-title">Doctor directory</h2>
+            <p>Search by name or choose a specialty to find an appointment.</p>
         </div>
-
-        <div style="flex: 1; min-width: 180px;">
+        <span><?= count($doctors) ?> <?= count($doctors) === 1 ? 'doctor' : 'doctors' ?></span>
+    </div>
+    <form action="index.php#doctor-directory" method="get" class="clinic-search" role="search" aria-label="Find a doctor">
+        <label for="search-input">Doctor or specialty
+            <input type="search" name="q" class="form-control" placeholder="e.g. Sara Khan or Cardiology"
+                   maxlength="100" value="<?= e($search_query) ?>" id="search-input">
+        </label>
+        <label for="specialty-filter">Specialty
             <select name="specialty" class="form-select" id="specialty-filter">
-                <option value="0">All Medical Specialties</option>
+                <option value="0">All specialties</option>
                 <?php foreach ($all_specialties as $sp): ?>
-                    <option value="<?php echo $sp['id']; ?>" <?php echo ($selected_specialty === (int)$sp['id']) ? 'selected' : ''; ?>>
-                        <?php echo e($sp['name']); ?>
-                    </option>
+                    <option value="<?= (int)$sp['id'] ?>"<?= $selected_specialty === (int)$sp['id'] ? ' selected' : '' ?>><?= e($sp['name']) ?></option>
                 <?php endforeach; ?>
             </select>
-        </div>
-
-        <div style="display: flex; gap: 10px;">
-            <button type="submit" class="btn btn-primary" id="btn-filter">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-                Search
-            </button>
-
-            <?php if (!empty($search_query) || $selected_specialty > 0): ?>
-                <a href="index.php" class="btn btn-outline" id="btn-reset-filter">Clear</a>
+        </label>
+        <div class="clinic-search-actions">
+            <button type="submit" class="btn btn-primary" id="btn-filter">Search</button>
+            <?php if ($search_query !== '' || $selected_specialty > 0): ?>
+                <a href="index.php#doctor-directory" class="btn btn-outline" id="btn-reset-filter">Clear</a>
             <?php endif; ?>
         </div>
     </form>
-</div>
-
-<!-- Doctors List -->
-<div class="section-header" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
-    <div>
-        <h2 style="font-size: 1.4rem; font-weight: 700; color: var(--primary);">Available Doctors & Specialists</h2>
-        <p style="color: var(--text-muted); font-size: 0.9rem;">
-            Showing <?php echo count($doctors); ?> certified physician<?php echo count($doctors) === 1 ? '' : 's'; ?>
-        </p>
-    </div>
-</div>
 
 <?php if (empty($doctors)): ?>
     <div class="card">
         <div class="empty-state">
-            <div class="empty-state-icon">🩺</div>
             <h3>No Doctors Found</h3>
             <p>We couldn't find any doctors matching your search criteria. Try selecting another specialty or reset filters.</p>
-            <a href="index.php" class="btn btn-outline">View All Doctors</a>
+            <a href="index.php#doctor-directory" class="btn btn-outline">View all doctors</a>
         </div>
     </div>
 <?php else: ?>
@@ -164,20 +138,32 @@ require_once __DIR__ . '/includes/header.php';
                     </div>
                 </div>
 
-                <div class="card-footer" style="display: flex; gap: 10px;">
-                    <?php if (is_logged_in()): ?>
+                <?php if ($role === 'patient' || $role === 'guest'): ?>
+                <div class="card-footer">
+                    <?php if ($role === 'patient'): ?>
                         <a href="book.php?doctor_id=<?php echo $doc['doctor_id']; ?>" class="btn btn-primary btn-block" id="btn-book-<?php echo $doc['doctor_id']; ?>">
-                            Book Appointment
+                            Book appointment
                         </a>
-                    <?php else: ?>
+                    <?php elseif ($role === 'guest'): ?>
                         <a href="login.php" class="btn btn-primary btn-block" id="btn-book-guest-<?php echo $doc['doctor_id']; ?>">
-                            Login to Book
+                            Sign in to book
                         </a>
                     <?php endif; ?>
                 </div>
+                <?php endif; ?>
             </div>
         <?php endforeach; ?>
     </div>
 <?php endif; ?>
+
+</section>
+<section class="clinic-visit-guide" id="visiting" aria-labelledby="visit-guide-title">
+    <h2 id="visit-guide-title">On the day of your visit</h2>
+    <ol>
+        <li><strong>Bring your token</strong><p>Open your appointment slip from My appointments.</p></li>
+        <li><strong>Check in at reception</strong><p>Give the receptionist your token when you arrive.</p></li>
+        <li><strong>Follow your turn</strong><p>See how many people are ahead and when the doctor may be ready.</p></li>
+    </ol>
+</section>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

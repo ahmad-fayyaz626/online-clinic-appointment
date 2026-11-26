@@ -1,11 +1,12 @@
 <?php
 require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/includes/clinic_queue.php';
 
 // Authentication required
-require_login();
+require_role('patient');
 
 $patient_id = $_SESSION['user_id'];
-$status_filter = isset($_GET['status']) ? trim($_GET['status']) : 'all';
+$status_filter = is_string($_GET['status'] ?? null) ? $_GET['status'] : 'all';
 
 // Build SQL with optional status filter
 $sql = "
@@ -14,6 +15,8 @@ $sql = "
         a.appointment_date,
         a.appointment_time,
         a.status,
+        a.checked_in_at,
+        a.consultation_started_at,
         a.reason,
         a.doctor_notes,
         a.created_at,
@@ -65,7 +68,6 @@ require_once __DIR__ . '/includes/header.php';
 <div class="dashboard-header">
     <div class="dashboard-title">
         <h1>My Appointments</h1>
-        <p>Manage, track, or cancel your scheduled clinic consultations</p>
     </div>
     <div>
         <a href="index.php" class="btn btn-primary" id="btn-book-new">
@@ -73,27 +75,18 @@ require_once __DIR__ . '/includes/header.php';
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            Book New Appointment
+            Book appointment
         </a>
     </div>
 </div>
 
-<!-- Quick Stats Summary -->
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px;">
-    <div class="card" style="padding: 18px 20px;">
-        <span class="stat-label">Total Bookings</span>
-        <div style="font-size: 1.6rem; font-weight: 800; color: var(--primary); margin-top: 4px;"><?php echo $total_count; ?></div>
-    </div>
-    <div class="card" style="padding: 18px 20px;">
-        <span class="stat-label">Active / Scheduled</span>
-        <div style="font-size: 1.6rem; font-weight: 800; color: var(--success); margin-top: 4px;"><?php echo $booked_count; ?></div>
-    </div>
-    <div class="card" style="padding: 18px 20px;">
-        <span class="stat-label">Cancelled</span>
-        <div style="font-size: 1.6rem; font-weight: 800; color: var(--text-muted); margin-top: 4px;"><?php echo $cancelled_count; ?></div>
-    </div>
-</div>
+<?php
+$queueRole = 'patient';
+$queueData = (new ClinicQueue($pdo))->patientQueue((int)$patient_id);
+require __DIR__ . '/includes/queue_section.php';
+?>
 
+<h2 class="queue-history-title">Appointment history</h2>
 <!-- Filter Tabs -->
 <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px; flex-wrap: wrap;">
     <a href="dashboard.php?status=all" class="btn btn-sm <?php echo ($status_filter === 'all') ? 'btn-dark' : 'btn-outline'; ?>" id="filter-all">
@@ -124,15 +117,15 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 <?php else: ?>
     <div class="appointments-table-card">
-        <table class="table" id="appointments-table">
+        <table role="table" class="table clinic-history-table" id="appointments-table">
             <thead>
-                <tr>
-                    <th>Doctor & Specialty</th>
-                    <th>Date & Time</th>
-                    <th>Fee</th>
-                    <th>Visit Reason</th>
-                    <th>Status</th>
-                    <th style="text-align: right;">Action</th>
+                <tr role="row">
+                    <th scope="col">Doctor & Specialty</th>
+                    <th scope="col">Date & Time</th>
+                    <th scope="col">Fee</th>
+                    <th scope="col">Visit Reason</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" style="text-align: right;">Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -143,8 +136,8 @@ require_once __DIR__ . '/includes/header.php';
                         $date_obj = new DateTime($apt['appointment_date']);
                         $formatted_date = $date_obj->format('M d, Y');
                     ?>
-                    <tr id="appointment-row-<?php echo $apt['appointment_id']; ?>">
-                        <td>
+                    <tr role="row" id="appointment-row-<?= (int)$apt['appointment_id'] ?>">
+                        <td role="cell" data-label="Doctor">
                             <div style="font-weight: 700; color: var(--primary);"><?php echo e($apt['doctor_name']); ?></div>
                             <div style="font-size: 0.85rem; color: var(--text-muted);">
                                 <span class="badge badge-specialty" style="padding: 2px 8px;"><?php echo e($apt['specialty_name']); ?></span>
@@ -152,20 +145,20 @@ require_once __DIR__ . '/includes/header.php';
                             </div>
                         </td>
 
-                        <td>
+                        <td role="cell" data-label="Date and time">
                             <div style="font-weight: 600; color: var(--text-primary);"><?php echo $formatted_date; ?></div>
                             <div style="font-size: 0.85rem; color: var(--accent); font-weight: 600;">
                                 <?php echo $formatted_time; ?>
                             </div>
                         </td>
 
-                        <td>
+                        <td role="cell" data-label="Fee">
                             <span style="font-weight: 700; color: var(--text-primary);">
                                 Rs. <?php echo number_format($apt['fee'], 0); ?>
                             </span>
                         </td>
 
-                        <td>
+                        <td role="cell" data-label="Visit details">
                             <div style="font-size: 0.88rem; color: var(--text-secondary);">
                                 <?php echo !empty($apt['reason']) ? e($apt['reason']) : '<span style="color: #94a3b8;">None specified</span>'; ?>
                             </div>
@@ -177,31 +170,30 @@ require_once __DIR__ . '/includes/header.php';
                             <?php endif; ?>
                         </td>
 
-                        <td>
+                        <td role="cell" data-label="Status">
                             <?php if ($apt['status'] === 'booked'): ?>
-                                <span class="badge badge-booked">Booked</span>
+                                <span class="badge badge-booked" data-history-status><?= e(ucfirst(ClinicQueue::visitState($apt))) ?></span>
+                            <?php elseif ($apt['status'] === 'no_show'): ?>
+                                <span class="badge badge-cancelled" data-history-status>Missed</span>
                             <?php elseif ($apt['status'] === 'cancelled'): ?>
-                                <span class="badge badge-cancelled">Cancelled</span>
+                                <span class="badge badge-cancelled" data-history-status>Cancelled</span>
                             <?php else: ?>
-                                <span class="badge badge-completed"><?php echo e(ucfirst($apt['status'])); ?></span>
+                                <span class="badge badge-completed" data-history-status>Completed</span>
                             <?php endif; ?>
                         </td>
 
-                        <td style="text-align: right; white-space: nowrap;">
+                        <td role="cell" data-label="Actions" style="text-align: right; white-space: nowrap;">
                             <a href="appointment_slip.php?id=<?php echo (int)$apt['appointment_id']; ?>" target="_blank" class="btn btn-outline btn-sm" style="margin-right: 6px;" title="View and print appointment receipt">
                                 🖨️ Slip
                             </a>
-                            <?php if ($apt['status'] === 'booked'): ?>
-                                <form action="cancel_appointment.php" method="POST" style="display: inline-block;" onsubmit="return confirm('Are you sure you want to cancel this appointment with <?php echo addslashes($apt['doctor_name']); ?>? The slot will be released.');">
+                            <?php if (in_array($apt['status'], ['booked', 'no_show'], true) && $apt['consultation_started_at'] === null && $apt['appointment_date'] >= date('Y-m-d')): ?>
+                                <form action="cancel_appointment.php" method="POST" class="history-cancel" data-history-cancel<?= $apt['status'] === 'no_show' ? ' hidden' : '' ?> onsubmit="return confirm('Cancel this appointment and release the slot?');">
+                                    <?= csrf_field() ?>
                                     <input type="hidden" name="appointment_id" value="<?php echo (int)$apt['appointment_id']; ?>">
                                     <button type="submit" class="btn btn-outline btn-sm" style="color: var(--danger); border-color: #fca5a5;" id="btn-cancel-<?php echo $apt['appointment_id']; ?>">
                                         Cancel
                                     </button>
                                 </form>
-                            <?php else: ?>
-                                <span style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">
-                                    <?php echo ($apt['status'] === 'completed') ? 'Visited' : 'Slot Released'; ?>
-                                </span>
                             <?php endif; ?>
                         </td>
                     </tr>

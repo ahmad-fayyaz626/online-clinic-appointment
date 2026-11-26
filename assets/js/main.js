@@ -3,87 +3,102 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Auto-dismiss flash alerts after 6 seconds
-    const alerts = document.querySelectorAll('.alert');
-    if (alerts.length > 0) {
-        setTimeout(() => {
-            alerts.forEach(alert => {
-                alert.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
-                alert.style.opacity = '0';
-                alert.style.transform = 'translateY(-8px)';
-                setTimeout(() => alert.remove(), 400);
-            });
-        }, 6000);
+    const header = document.querySelector('[data-clinic-header]');
+    const menu = header?.querySelector('[data-menu-toggle]');
+    if (menu) {
+        header.dataset.enhanced = 'true';
+        menu.hidden = false;
+        const narrow = window.matchMedia('(max-width: 860px)');
+        const nav = document.getElementById(menu.getAttribute('aria-controls'));
+        const isOpen = () => menu.getAttribute('aria-expanded') === 'true';
+        const setOpen = open => {
+            menu.setAttribute('aria-expanded', String(open));
+            header.dataset.menuOpen = String(open);
+        };
+        menu.addEventListener('click', () => setOpen(!isOpen()));
+        header.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && isOpen()) {
+                setOpen(false);
+                menu.focus();
+            }
+        });
+        nav.addEventListener('click', event => {
+            if (event.target.closest('a') && isOpen()) {
+                setOpen(false);
+            }
+        });
+        document.addEventListener('pointerdown', event => {
+            if (isOpen() && !header.contains(event.target)) setOpen(false);
+        });
+        narrow.addEventListener('change', event => {
+            if (event.matches && nav.contains(document.activeElement)) menu.focus();
+            setOpen(false);
+        });
     }
 
-    // 2. Real-time Doctor Slot Availability on Booking Form
     const bookingForm = document.getElementById('appointment-booking-form');
-    const doctorInput = document.querySelector('input[name="doctor_id"]') || document.getElementById('doctor_id');
-    const dateInput = document.getElementById('appointment_date');
-    const timeSelect = document.getElementById('appointment_time');
-
-    if (bookingForm && doctorInput && dateInput && timeSelect) {
-        // Save original options
-        const originalOptions = Array.from(timeSelect.options).map(opt => ({
-            value: opt.value,
-            text: opt.text.replace(' (Booked - Unavailable)', '')
-        }));
+    if (bookingForm) {
+        const doctor = bookingForm.elements.doctor_id;
+        const date = bookingForm.elements.appointment_date;
+        const time = bookingForm.elements.appointment_time;
+        const feedback = document.getElementById('slot-feedback');
+        let activeRequest;
 
         async function updateAvailableSlots() {
-            const doctorId = doctorInput.value;
-            const dateVal = dateInput.value;
+            activeRequest?.abort();
+            activeRequest = null;
+            Array.from(time.options).forEach(option => {
+                option.textContent = option.dataset.label;
+                option.disabled = false;
+            });
+            time.removeAttribute('aria-busy');
+            if (!doctor.value || !date.value) {
+                feedback.textContent = '';
+                return;
+            }
 
-            if (!doctorId || !dateVal) return;
+            const request = new AbortController();
+            activeRequest = request;
+            const timeout = setTimeout(() => request.abort(), 8000);
+            time.setAttribute('aria-busy', 'true');
+            feedback.textContent = 'Checking available times…';
 
             try {
-                const response = await fetch(`check_slots.php?doctor_id=${encodeURIComponent(doctorId)}&date=${encodeURIComponent(dateVal)}`);
-                if (!response.ok) return;
+                const query = new URLSearchParams({ doctor_id: doctor.value, date: date.value });
+                const response = await fetch('check_slots.php?' + query, { signal: request.signal });
+                if (!response.ok) throw new Error('Availability unavailable');
+                const { booked_slots: booked, cutoff } = await response.json();
+                if (request.signal.aborted) return;
 
-                const data = await response.json();
-                const bookedSlots = data.booked_slots || [];
-
-                // Update options in dropdown
-                timeSelect.innerHTML = '';
-                originalOptions.forEach(opt => {
-                    const optionEl = document.createElement('option');
-                    optionEl.value = opt.value;
-
-                    if (!opt.value) {
-                        optionEl.text = opt.text;
-                        timeSelect.appendChild(optionEl);
-                        return;
-                    }
-
-                    const isBooked = bookedSlots.includes(opt.value);
-                    if (isBooked) {
-                        optionEl.text = `${opt.text} (Booked - Unavailable)`;
-                        optionEl.disabled = true;
-                        optionEl.style.color = '#94a3b8';
-                        optionEl.style.backgroundColor = '#f1f5f9';
+                let available = 0;
+                for (const option of time.options) {
+                    if (!option.value) continue;
+                    if (cutoff && option.value <= cutoff) {
+                        option.disabled = true;
+                        option.textContent += ' (past)';
+                    } else if (booked.includes(option.value)) {
+                        option.disabled = true;
+                        option.textContent += ' (booked)';
                     } else {
-                        optionEl.text = opt.text;
-                        optionEl.disabled = false;
+                        available++;
                     }
-
-                    timeSelect.appendChild(optionEl);
-                });
-
-                // If currently selected slot is disabled, reset value
-                if (timeSelect.selectedOptions[0]?.disabled) {
-                    timeSelect.value = '';
                 }
-            } catch (err) {
-                console.warn('Slot availability fetch notice:', err);
+                if (time.selectedOptions[0]?.disabled) time.value = '';
+                feedback.textContent = available ? '' : 'No times remain. Choose another day.';
+            } catch {
+                if (activeRequest === request) {
+                    feedback.textContent = 'Live availability is temporarily unavailable. We’ll check again when you submit.';
+                }
+            } finally {
+                clearTimeout(timeout);
+                if (activeRequest === request) time.removeAttribute('aria-busy');
             }
         }
 
-        dateInput.addEventListener('change', updateAvailableSlots);
-        doctorInput.addEventListener('change', updateAvailableSlots);
-
-        // Run once on load if values present
-        if (doctorInput.value && dateInput.value) {
-            updateAvailableSlots();
-        }
+        for (const option of time.options) option.dataset.label = option.textContent;
+        doctor.addEventListener('change', updateAvailableSlots);
+        date.addEventListener('change', updateAvailableSlots);
+        updateAvailableSlots();
     }
 
     // 3. Client-side Form Validation for Signup Form
@@ -93,9 +108,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const pwd = document.getElementById('password').value;
             const confirmPwd = document.getElementById('confirm_password').value;
 
-            if (pwd.length < 6) {
+            if (Array.from(pwd).length < 12 || new TextEncoder().encode(pwd).length > 72) {
                 e.preventDefault();
-                alert('Password must be at least 6 characters long.');
+                alert('Use at least 12 characters and at most 72 bytes for the password.');
                 return false;
             }
 
@@ -106,20 +121,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-
-    // 4. Prevent double form submission on submit buttons
-    const forms = document.querySelectorAll('form');
-    forms.forEach(form => {
-        form.addEventListener('submit', function() {
-            const submitBtn = this.querySelector('button[type="submit"]');
-            if (submitBtn && !submitBtn.disabled) {
-                setTimeout(() => {
-                    submitBtn.disabled = true;
-                    submitBtn.style.opacity = '0.7';
-                }, 50);
-            }
-        });
-    });
 
     // 5. Password Show / Hide Toggle functionality
     const passwordToggleButtons = document.querySelectorAll('.password-toggle-btn');

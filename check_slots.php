@@ -1,32 +1,28 @@
 <?php
-/**
- * AJAX Endpoint: Check booked slots for a specific doctor and date
- */
 require_once __DIR__ . '/config/db.php';
 
-header('Content-Type: application/json');
+header('Content-Type: application/json; charset=UTF-8');
 
-$doctor_id = isset($_GET['doctor_id']) ? (int)$_GET['doctor_id'] : 0;
-$date      = isset($_GET['date']) ? trim($_GET['date']) : '';
-
-if ($doctor_id <= 0 || empty($date)) {
-    echo json_encode(['booked_slots' => []]);
+$doctorId = filter_input(INPUT_GET, 'doctor_id', FILTER_VALIDATE_INT) ?: 0;
+$date = is_string($_GET['date'] ?? null) ? $_GET['date'] : '';
+$day = preg_match('/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/D', $date)
+    ? DateTimeImmutable::createFromFormat('!Y-m-d', $date) : false;
+if ($doctorId <= 0 || !$day || $day->format('Y-m-d') !== $date || $date < date('Y-m-d')) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Choose a doctor and a valid date.']);
     exit;
 }
 
 try {
-    // Only check booked status
-    $stmt = $pdo->prepare("
-        SELECT appointment_time 
-        FROM appointments 
-        WHERE doctor_id = ? 
-          AND appointment_date = ? 
-          AND status = 'booked'
-    ");
-    $stmt->execute([$doctor_id, $date]);
-    $slots = $stmt->fetchAll(PDO::FETCH_COLUMN);
-
-    echo json_encode(['booked_slots' => $slots ?: []]);
-} catch (PDOException $e) {
-    echo json_encode(['error' => 'Database error', 'booked_slots' => []]);
+    $stmt = $pdo->prepare("SELECT appointment_time FROM appointments
+                           WHERE doctor_id = ? AND appointment_date = ? AND status IN ('booked', 'completed')");
+    $stmt->execute([$doctorId, $date]);
+    echo json_encode([
+        'booked_slots' => $stmt->fetchAll(PDO::FETCH_COLUMN),
+        'cutoff' => $date === date('Y-m-d') ? date('H:i:s') : null,
+    ]);
+} catch (PDOException $error) {
+    report_app_error($error);
+    http_response_code(503);
+    echo json_encode(['error' => 'Availability could not be checked.']);
 }

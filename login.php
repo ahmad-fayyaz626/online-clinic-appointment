@@ -18,62 +18,29 @@ $error = '';
 $email = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email    = trim($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
+    $email    = trim(is_string($_POST['email'] ?? null) ? $_POST['email'] : '');
+    $password = is_string($_POST['password'] ?? null) ? $_POST['password'] : '';
 
-    if (empty($email) || empty($password)) {
+    if ($email === '' || $password === '' || strlen($email) > 150 || strlen($password) > 4096) {
         $error = 'Please enter both your email and password.';
     } else {
-        // Automatic sync & verification for Admin credentials (admin@clinic.com / Admin@123)
-        if (strtolower($email) === 'admin@clinic.com' && $password === 'Admin@123') {
-            try {
-                $admin_stmt = $pdo->prepare("SELECT id, full_name, email, role FROM users WHERE LOWER(email) = 'admin@clinic.com' LIMIT 1");
-                $admin_stmt->execute();
-                $admin_user = $admin_stmt->fetch();
-
-                if (!$admin_user) {
-                    $admin_hash = password_hash('Admin@123', PASSWORD_DEFAULT);
-                    $ins = $pdo->prepare("INSERT INTO users (full_name, email, password, phone, role) VALUES ('Clinic Admin', 'admin@clinic.com', ?, '03001239999', 'admin')");
-                    $ins->execute([$admin_hash]);
-                    $admin_id = (int)$pdo->lastInsertId();
-                    $admin_name = 'Clinic Admin';
-                } else {
-                    $admin_id = (int)$admin_user['id'];
-                    $admin_name = $admin_user['full_name'];
-                    $admin_hash = password_hash('Admin@123', PASSWORD_DEFAULT);
-                    $upd = $pdo->prepare("UPDATE users SET password = ?, role = 'admin' WHERE id = ?");
-                    $upd->execute([$admin_hash, $admin_id]);
-                }
-
-                session_regenerate_id(true);
-                $_SESSION['user_id']    = $admin_id;
-                $_SESSION['user_name']  = $admin_name;
-                $_SESSION['user_email'] = 'admin@clinic.com';
-                $_SESSION['user_role']  = 'admin';
-
-                set_flash('success', "Welcome to the Clinic Administration Panel!");
-                header('Location: admin_dashboard.php');
-                exit;
-            } catch (Exception $e) {
-                // Fallback to standard query if custom query fails
-            }
-        }
-
         // Standard user query
-        $stmt = $pdo->prepare("SELECT id, full_name, email, password, role FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1");
+        $stmt = $pdo->prepare("SELECT id, full_name, email, password, role FROM users WHERE email = ? LIMIT 1");
         $stmt->execute([$email]);
         $user = $stmt->fetch();
 
-        if ($user && password_verify($password, $user['password'])) {
+        $hash = $user['password'] ?? '$2y$10$UVAHa0L4caQ9SuWprFf.La2vlpaOIAdfE0Z0c4WcKlNyouOAIAkHK';
+        $demoPassword = $production && in_array($password, ['Admin@123', 'Doctor@123', 'Patient@123'], true);
+        if (password_verify($password, $hash) && $user && !$demoPassword) {
             // Authentication successful: regenerate session to prevent session fixation
             session_regenerate_id(true);
+            $_SESSION = [];
 
             $_SESSION['user_id']    = $user['id'];
             $_SESSION['user_name']  = $user['full_name'];
             $_SESSION['user_email'] = $user['email'];
             $_SESSION['user_role']  = $user['role'];
-
-            set_flash('success', "Welcome back, " . $user['full_name'] . "!");
+            $_SESSION['auth_version'] = hash('sha256', $user['password']);
 
             // Role-based destination redirect
             if ($user['role'] === 'admin') {
@@ -114,6 +81,7 @@ require_once __DIR__ . '/includes/header.php';
             <?php endif; ?>
 
             <form action="login.php" method="POST" novalidate id="login-form">
+                <?= csrf_field() ?>
                 <div class="form-group">
                     <label class="form-label" for="email">Email Address</label>
                     <input 

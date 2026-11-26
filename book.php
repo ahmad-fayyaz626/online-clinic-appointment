@@ -2,7 +2,8 @@
 require_once __DIR__ . '/config/db.php';
 
 // Authentication required
-require_login();
+require_role('patient');
+require_once __DIR__ . '/includes/clinic_queue.php';
 
 $patient_id = $_SESSION['user_id'];
 $errors = [];
@@ -24,7 +25,8 @@ $doctors_stmt = $pdo->query("
 $all_doctors = $doctors_stmt->fetchAll();
 
 // Doctor ID from query or form
-$selected_doctor_id = isset($_REQUEST['doctor_id']) ? (int)$_REQUEST['doctor_id'] : 0;
+$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
+$selected_doctor_id = filter_input($submitted ? INPUT_POST : INPUT_GET, 'doctor_id', FILTER_VALIDATE_INT) ?: 0;
 
 // Fetch selected doctor details if provided
 $selected_doctor = null;
@@ -61,92 +63,37 @@ $available_slots = [
     '19:00:00' => '07:00 PM'
 ];
 
-$appointment_date = $_POST['appointment_date'] ?? date('Y-m-d');
-$appointment_time = $_POST['appointment_time'] ?? '';
-$reason           = trim($_POST['reason'] ?? '');
+$appointment_date = is_string($_POST['appointment_date'] ?? null) ? $_POST['appointment_date'] : date('Y-m-d');
+$appointment_time = is_string($_POST['appointment_time'] ?? null) ? $_POST['appointment_time'] : '';
+$reason = is_string($_POST['reason'] ?? null) ? trim($_POST['reason']) : '';
 
-// Handle appointment booking submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $doctor_id        = (int)($_POST['doctor_id'] ?? 0);
-    $appointment_date = trim($_POST['appointment_date'] ?? '');
-    $appointment_time = trim($_POST['appointment_time'] ?? '');
-    $reason           = trim($_POST['reason'] ?? '');
-
-    // 1. Verify doctor exists
-    if ($doctor_id <= 0) {
-        $errors[] = 'Please select a valid doctor.';
-    } else {
-        $check_doc = $pdo->prepare("SELECT id FROM doctors WHERE id = ?");
-        $check_doc->execute([$doctor_id]);
-        if (!$check_doc->fetch()) {
-            $errors[] = 'The selected doctor does not exist.';
-        }
+if ($submitted) {
+    $parsedDate = preg_match('/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/D', $appointment_date)
+        ? DateTimeImmutable::createFromFormat('!Y-m-d', $appointment_date) : false;
+    if (!$selected_doctor) {
+        $errors[] = 'Select a doctor.';
+    }
+    if (!$parsedDate || $parsedDate->format('Y-m-d') !== $appointment_date || $appointment_date < date('Y-m-d')) {
+        $errors[] = 'Choose a valid appointment date from today onward.';
+    }
+    if (!isset($available_slots[$appointment_time])) {
+        $errors[] = 'Choose a consultation time.';
+    }
+    if (mb_strlen($reason) > 255) {
+        $errors[] = 'Keep the reason for your visit to 255 characters or fewer.';
     }
 
-    // 2. Validate date
-    if (empty($appointment_date)) {
-        $errors[] = 'Please select an appointment date.';
-    } else {
-        $today = date('Y-m-d');
-        if ($appointment_date < $today) {
-            $errors[] = 'Appointment date cannot be in the past.';
-        }
-    }
-
-    // 3. Validate time slot
-    if (empty($appointment_time)) {
-        $errors[] = 'Please choose a consultation time slot.';
-    } elseif (!array_key_exists($appointment_time, $available_slots)) {
-        $errors[] = 'Please select a valid clinic consultation time slot.';
-    }
-
-    // Business Rule 1: Patient cannot book 2 appointments at the same date and time (where status = booked)
-    if (empty($errors)) {
-        $patient_conflict_stmt = $pdo->prepare("
-            SELECT id FROM appointments 
-            WHERE patient_id = ? 
-              AND appointment_date = ? 
-              AND appointment_time = ? 
-              AND status = 'booked'
-            LIMIT 1
-        ");
-        $patient_conflict_stmt->execute([$patient_id, $appointment_date, $appointment_time]);
-        if ($patient_conflict_stmt->fetch()) {
-            $errors[] = 'You already have another appointment scheduled at this exact date and time. Please pick another slot.';
-        }
-    }
-
-    // Business Rule 2: Doctor cannot be double-booked on the same slot (status = booked only)
-    if (empty($errors)) {
-        $doctor_conflict_stmt = $pdo->prepare("
-            SELECT id FROM appointments 
-            WHERE doctor_id = ? 
-              AND appointment_date = ? 
-              AND appointment_time = ? 
-              AND status = 'booked'
-            LIMIT 1
-        ");
-        $doctor_conflict_stmt->execute([$doctor_id, $appointment_date, $appointment_time]);
-        if ($doctor_conflict_stmt->fetch()) {
-            $errors[] = 'This doctor is already booked for this time slot on the selected date. Please choose a different slot.';
-        }
-    }
-
-    // Insert appointment
-    if (empty($errors)) {
+    if ($errors === []) {
         try {
-            $insert_stmt = $pdo->prepare("
-                INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, status, reason)
-                VALUES (?, ?, ?, ?, 'booked', ?)
-            ");
-            $insert_stmt->execute([$patient_id, $doctor_id, $appointment_date, $appointment_time, $reason]);
-
-            $time_formatted = $available_slots[$appointment_time] ?? $appointment_time;
-            set_flash('success', "Your appointment has been successfully booked for {$appointment_date} at {$time_formatted}!");
-            header('Location: dashboard.php');
+            (new ClinicQueue($pdo))->book($patient_id, $selected_doctor_id, $appointment_date, $appointment_time, $reason);
+            set_flash('success', 'Appointment booked. Bring your appointment token to reception to check in.');
+            header('Location: dashboard.php', true, 303);
             exit;
-        } catch (PDOException $e) {
-            $errors[] = 'Booking failed due to a database error: ' . $e->getMessage();
+        } catch (QueueRuleViolation $error) {
+            $errors[] = $error->getMessage();
+        } catch (PDOException $error) {
+            report_app_error($error);
+            $errors[] = 'The appointment could not be booked. Please try again.';
         }
     }
 }
@@ -199,6 +146,7 @@ require_once __DIR__ . '/includes/header.php';
             <?php endif; ?>
 
             <form action="book.php" method="POST" id="appointment-booking-form">
+                <?= csrf_field() ?>
                 <?php if ($selected_doctor): ?>
                     <input type="hidden" name="doctor_id" value="<?php echo (int)$selected_doctor['doctor_id']; ?>">
                 <?php else: ?>
@@ -240,14 +188,16 @@ require_once __DIR__ . '/includes/header.php';
                                 </option>
                             <?php endforeach; ?>
                         </select>
-                        <div class="form-text">Each slot is 45 minutes of consultation.</div>
+                        <div class="form-text">When you arrive, give your appointment token to reception.</div>
                     </div>
                 </div>
+                <p class="form-text" id="slot-feedback" role="status"></p>
 
                 <div class="form-group">
                     <label class="form-label" for="reason">Reason for Visit / Symptoms (Optional)</label>
                     <textarea 
-                        name="reason" 
+                        name="reason"
+                        maxlength="255"
                         id="reason" 
                         class="form-control" 
                         rows="3" 

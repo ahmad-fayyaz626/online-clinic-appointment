@@ -1,6 +1,11 @@
 <?php
 require_once __DIR__ . '/config/db.php';
 
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header('Location: index.php');
+    exit;
+}
+
 // Unset all session variables
 $_SESSION = [];
 
