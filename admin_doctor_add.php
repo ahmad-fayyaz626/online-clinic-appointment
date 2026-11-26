@@ -33,8 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $errors[] = 'A valid email address is required.';
     }
-    if (empty($password) || strlen($password) < 6) {
-        $errors[] = 'Password must be at least 6 characters.';
+    if (empty($password) || !new_password_is_valid($password)) {
+        $errors[] = 'Use at least 12 characters and at most 72 bytes for the password.';
     }
     if (empty($phone)) {
         $errors[] = 'Phone number is required.';
@@ -91,7 +91,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            $errors[] = 'Database error creating doctor: ' . $e->getMessage();
+            report_app_error($e);
+            $errors[] = 'Unable to save changes right now. Please try again.';
         }
     }
 }
@@ -125,6 +126,7 @@ require_once __DIR__ . '/includes/header.php';
             <?php endif; ?>
 
             <form action="admin_doctor_add.php" method="POST" id="add-doctor-form">
+                <?= csrf_field() ?>
                 <div class="form-group">
                     <label class="form-label" for="full_name">Doctor Full Name</label>
                     <input 
@@ -160,7 +162,7 @@ require_once __DIR__ . '/includes/header.php';
                                 id="password" 
                                 name="password" 
                                 class="form-control" 
-                                placeholder="Min 6 characters" 
+                                placeholder="At least 12 characters"
                                 required
                             >
                             <button type="button" class="password-toggle-btn" data-target="password" onclick="togglePasswordVisibility('password', this, event)" aria-label="Show password" title="Show password" tabindex="-1">

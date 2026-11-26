@@ -30,7 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     header('Location: admin_specialties.php');
                     exit;
                 } catch (PDOException $e) {
-                    $errors[] = 'Database error: ' . $e->getMessage();
+                    report_app_error($e);
+                    $errors[] = 'Unable to save changes right now. Please try again.';
                 }
             }
         }
@@ -54,7 +55,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     header('Location: admin_specialties.php');
                     exit;
                 } catch (PDOException $e) {
-                    $errors[] = 'Database error: ' . $e->getMessage();
+                    report_app_error($e);
+                    $errors[] = 'Unable to save changes right now. Please try again.';
                 }
             }
         }
@@ -80,7 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     header('Location: admin_specialties.php');
                     exit;
                 } catch (PDOException $e) {
-                    $errors[] = 'Database error: ' . $e->getMessage();
+                    report_app_error($e);
+                    $errors[] = 'Unable to save changes right now. Please try again.';
                 }
             }
         }
@@ -170,7 +173,8 @@ require_once __DIR__ . '/includes/header.php';
                                         Edit
                                     </a>
                                     <?php if ((int)$sp['total_doctors'] === 0): ?>
-                                        <form action="admin_specialties.php" method="POST" style="display: inline;" onsubmit="return confirm('Delete specialty \'<?php echo addslashes($sp['name']); ?>\'?');">
+                                        <form action="admin_specialties.php" method="POST" style="display: inline;" onsubmit="return confirm('Delete this specialty?');">
+                                            <?= csrf_field() ?>
                                             <input type="hidden" name="action" value="delete">
                                             <input type="hidden" name="id" value="<?php echo (int)$sp['id']; ?>">
                                             <button type="submit" class="btn btn-sm btn-danger">
@@ -199,6 +203,7 @@ require_once __DIR__ . '/includes/header.php';
             </div>
             <div class="card-body">
                 <form action="admin_specialties.php" method="POST">
+                    <?= csrf_field() ?>
                     <input type="hidden" name="action" value="<?php echo $edit_id > 0 ? 'update' : 'add'; ?>">
                     <?php if ($edit_id > 0): ?>
                         <input type="hidden" name="id" value="<?php echo $edit_id; ?>">

@@ -1,30 +1,9 @@
 <?php
 require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/includes/clinic_queue.php';
 
 // Access control: Admin only
 require_admin();
-
-// 1. Fetch clinic statistics
-$doctor_count_stmt = $pdo->query("SELECT COUNT(*) FROM doctors");
-$total_doctors = (int)$doctor_count_stmt->fetchColumn();
-
-$patient_count_stmt = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'patient'");
-$total_patients = (int)$patient_count_stmt->fetchColumn();
-
-$apt_stats_stmt = $pdo->query("
-    SELECT 
-        COUNT(*) AS total_appointments,
-        SUM(CASE WHEN status = 'booked' THEN 1 ELSE 0 END) AS booked_count,
-        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
-        SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_count
-    FROM appointments
-");
-$apt_stats = $apt_stats_stmt->fetch();
-
-$total_appointments = (int)($apt_stats['total_appointments'] ?? 0);
-$booked_count       = (int)($apt_stats['booked_count'] ?? 0);
-$completed_count    = (int)($apt_stats['completed_count'] ?? 0);
-$cancelled_count    = (int)($apt_stats['cancelled_count'] ?? 0);
 
 // 2. Fetch all doctors with specialty and appointment count
 $doctors_stmt = $pdo->query("
@@ -53,7 +32,8 @@ $recent_apt_stmt = $pdo->query("
         a.appointment_date,
         a.appointment_time,
         a.status,
-        a.reason,
+        a.checked_in_at,
+        a.consultation_started_at,
         p.full_name AS patient_name,
         p.phone AS patient_phone,
         doc_u.full_name AS doctor_name,
@@ -77,11 +57,8 @@ require_once __DIR__ . '/includes/header.php';
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
         <div>
             <h1 style="font-size: 1.85rem; font-weight: 800; color: var(--primary); margin: 0 0 4px 0;">
-                Clinic Administration Panel
+                Clinic administration
             </h1>
-            <p style="color: var(--text-secondary); margin: 0;">
-                Manage clinic doctors, monitor patient appointments, and oversee daily operations.
-            </p>
         </div>
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
             <a href="admin_specialties.php" class="btn btn-outline" id="btn-manage-specialties">
@@ -98,31 +75,19 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 </div>
 
-<!-- Stats Summary Cards -->
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px;">
-    <div class="card" style="padding: 20px;">
-        <span class="stat-label">Active Doctors</span>
-        <div style="font-size: 1.8rem; font-weight: 800; color: var(--primary); margin-top: 4px;"><?php echo $total_doctors; ?></div>
-    </div>
-    <div class="card" style="padding: 20px;">
-        <span class="stat-label">Registered Patients</span>
-        <div style="font-size: 1.8rem; font-weight: 800; color: var(--accent); margin-top: 4px;"><?php echo $total_patients; ?></div>
-    </div>
-    <div class="card" style="padding: 20px;">
-        <span class="stat-label">Total Appointments</span>
-        <div style="font-size: 1.8rem; font-weight: 800; color: var(--text-primary); margin-top: 4px;"><?php echo $total_appointments; ?></div>
-    </div>
-    <div class="card" style="padding: 20px; border-left: 4px solid var(--success);">
-        <span class="stat-label">Active Booked</span>
-        <div style="font-size: 1.8rem; font-weight: 800; color: var(--success); margin-top: 4px;"><?php echo $booked_count; ?></div>
-    </div>
-</div>
+<?php
+$queueRole = 'admin';
+$clinicQueue = new ClinicQueue($pdo);
+$queueData = $clinicQueue->clinicOverview();
+$receptionVisits = $clinicQueue->receptionVisits();
+require __DIR__ . '/includes/queue_section.php';
+?>
 
 <!-- Section 1: Doctor CRUD Management -->
 <div style="margin-bottom: 40px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
         <h2 style="font-size: 1.35rem; font-weight: 700; color: var(--primary); margin: 0;">
-            Doctor Directory (CRUD)
+            Manage doctors
         </h2>
         <span style="font-size: 0.88rem; color: var(--text-muted);">
             Showing <?php echo count($doctors); ?> registered specialist<?php echo count($doctors) === 1 ? '' : 's'; ?>
@@ -182,12 +147,17 @@ require_once __DIR__ . '/includes/header.php';
                                 <a href="admin_doctor_edit.php?id=<?php echo (int)$doc['doctor_id']; ?>" class="btn btn-outline btn-sm" style="margin-right: 6px;">
                                     Edit
                                 </a>
-                                <form action="admin_doctor_delete.php" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete Dr. <?php echo addslashes($doc['full_name']); ?>? This will also remove their user account.');">
-                                    <input type="hidden" name="doctor_id" value="<?php echo (int)$doc['doctor_id']; ?>">
-                                    <button type="submit" class="btn btn-sm btn-danger">
-                                        Delete
-                                    </button>
-                                </form>
+                                <?php if ((int)$doc['total_doctor_appointments'] === 0): ?>
+                                    <form action="admin_doctor_delete.php" method="POST" style="display: inline;" onsubmit="return confirm('Remove this doctor from the clinic?');">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="doctor_id" value="<?php echo (int)$doc['doctor_id']; ?>">
+                                        <button type="submit" class="btn btn-sm btn-danger">
+                                            Delete
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <span class="text-muted">Visit history</span>
+                                <?php endif; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -210,7 +180,6 @@ require_once __DIR__ . '/includes/header.php';
                     <th style="padding: 14px 18px; font-weight: 700; font-size: 0.85rem; color: var(--text-secondary);">Patient</th>
                     <th style="padding: 14px 18px; font-weight: 700; font-size: 0.85rem; color: var(--text-secondary);">Doctor & Specialty</th>
                     <th style="padding: 14px 18px; font-weight: 700; font-size: 0.85rem; color: var(--text-secondary);">Date & Time</th>
-                    <th style="padding: 14px 18px; font-weight: 700; font-size: 0.85rem; color: var(--text-secondary);">Reason</th>
                     <th style="padding: 14px 18px; font-weight: 700; font-size: 0.85rem; color: var(--text-secondary);">Status</th>
                 </tr>
             </thead>
@@ -249,16 +218,13 @@ require_once __DIR__ . '/includes/header.php';
                                 <div style="font-weight: 600; font-size: 0.9rem;"><?php echo $formatted_date; ?></div>
                                 <div style="font-size: 0.8rem; color: var(--text-muted);">⏰ <?php echo $formatted_time; ?></div>
                             </td>
-                            <td style="padding: 14px 18px; font-size: 0.88rem; color: var(--text-secondary);">
-                                <?php echo !empty($apt['reason']) ? e($apt['reason']) : '<em>Routine Checkup</em>'; ?>
-                            </td>
                             <td style="padding: 14px 18px; white-space: nowrap;">
                                 <?php if ($apt['status'] === 'booked'): ?>
-                                    <span class="badge badge-booked">Booked</span>
+                                    <span class="badge badge-booked"><?= e(ucfirst(ClinicQueue::visitState($apt))) ?></span>
                                 <?php elseif ($apt['status'] === 'completed'): ?>
                                     <span class="badge badge-completed">Completed</span>
                                 <?php else: ?>
-                                    <span class="badge badge-cancelled">Cancelled</span>
+                                    <span class="badge badge-cancelled"><?= $apt['status'] === 'no_show' ? 'Missed' : 'Cancelled' ?></span>
                                 <?php endif; ?>
                             </td>
                         </tr>

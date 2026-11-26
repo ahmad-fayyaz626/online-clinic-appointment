@@ -3,9 +3,12 @@ require_once __DIR__ . '/config/db.php';
 
 // Access control: Doctor only
 require_doctor();
+require_once __DIR__ . '/includes/clinic_queue.php';
+$queue = new ClinicQueue($pdo);
 
 $user_id = $_SESSION['user_id'];
-$appointment_id = isset($_GET['id']) ? (int)$_GET['id'] : (isset($_POST['appointment_id']) ? (int)$_POST['appointment_id'] : 0);
+$submitted = $_SERVER['REQUEST_METHOD'] === 'POST';
+$appointment_id = filter_input($submitted ? INPUT_POST : INPUT_GET, $submitted ? 'appointment_id' : 'id', FILTER_VALIDATE_INT) ?: 0;
 
 if ($appointment_id <= 0) {
     set_flash('error', 'Invalid appointment selected.');
@@ -13,18 +16,7 @@ if ($appointment_id <= 0) {
     exit;
 }
 
-// 1. Fetch doctor ID for currently logged-in user
-$doctor_stmt = $pdo->prepare("SELECT id FROM doctors WHERE user_id = ? LIMIT 1");
-$doctor_stmt->execute([$user_id]);
-$doctor = $doctor_stmt->fetch();
-
-if (!$doctor) {
-    set_flash('error', 'Doctor profile not found.');
-    header('Location: doctor_dashboard.php');
-    exit;
-}
-
-$doctor_id = (int)$doctor['id'];
+$doctor_id = $queue->doctorId($user_id);
 
 // 2. Fetch appointment details and verify ownership
 $apt_stmt = $pdo->prepare("
@@ -33,6 +25,7 @@ $apt_stmt = $pdo->prepare("
         a.appointment_date,
         a.appointment_time,
         a.status,
+        a.consultation_started_at,
         a.reason,
         a.doctor_notes,
         p.full_name AS patient_name,
@@ -52,25 +45,33 @@ if (!$appointment) {
     exit;
 }
 
+if (!$submitted && ($appointment['status'] !== 'booked' || $appointment['consultation_started_at'] === null)) {
+    set_flash('error', 'Open the consultation in progress from the live queue.');
+    header('Location: doctor_dashboard.php');
+    exit;
+}
+
 $errors = [];
 $doctor_notes = $appointment['doctor_notes'] ?? '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $doctor_notes = trim($_POST['doctor_notes'] ?? '');
-
-    try {
-        $update_stmt = $pdo->prepare("
-            UPDATE appointments 
-            SET status = 'completed', doctor_notes = ? 
-            WHERE id = ? AND doctor_id = ?
-        ");
-        $update_stmt->execute([$doctor_notes, $appointment_id, $doctor_id]);
-
-        set_flash('success', "Consultation for {$appointment['patient_name']} completed successfully with prescription recorded!");
-        header('Location: doctor_dashboard.php');
-        exit;
-    } catch (PDOException $e) {
-        $errors[] = 'Database error updating appointment: ' . $e->getMessage();
+if ($submitted) {
+    $doctor_notes = is_string($_POST['doctor_notes'] ?? null) ? trim($_POST['doctor_notes']) : '';
+    if (mb_strlen($doctor_notes) > 10000) {
+        $errors[] = 'Keep the consultation notes to 10,000 characters or fewer.';
+    } else {
+        try {
+            $queue->finish($appointment_id, $doctor_id, $doctor_notes);
+            set_flash('success', 'Consultation completed. The live queue has been updated.');
+            header('Location: doctor_dashboard.php', true, 303);
+            exit;
+        } catch (QueueRuleViolation $error) {
+            set_flash('error', $error->getMessage());
+            header('Location: doctor_dashboard.php', true, 303);
+            exit;
+        } catch (PDOException $error) {
+            report_app_error($error);
+            $errors[] = 'The consultation could not be completed. Your notes are still on this form.';
+        }
     }
 }
 
@@ -127,6 +128,7 @@ require_once __DIR__ . '/includes/header.php';
 
             <!-- Complete Consultation Form -->
             <form action="doctor_complete_appointment.php" method="POST" id="complete-consultation-form">
+                <?= csrf_field() ?>
                 <input type="hidden" name="appointment_id" value="<?php echo (int)$appointment['appointment_id']; ?>">
 
                 <div class="form-group">
@@ -135,10 +137,11 @@ require_once __DIR__ . '/includes/header.php';
                     </label>
                     <textarea 
                         id="doctor_notes" 
-                        name="doctor_notes" 
+                        name="doctor_notes"
+                        maxlength="10000"
                         rows="5" 
                         class="form-control" 
-                        placeholder="Write clinical findings, diagnosis, and prescription (e.g. Tab Paracetamol 500mg 1+0+1 after meals for 3 days. Drink plenty of water and rest.)"
+                        placeholder="Enter the findings and instructions for this visit."
                         style="resize: vertical; font-family: inherit;"
                     ><?php echo e($doctor_notes); ?></textarea>
                     <div class="form-text">

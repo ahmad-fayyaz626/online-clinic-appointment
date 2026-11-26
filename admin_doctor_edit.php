@@ -88,15 +88,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Consultation fee must be greater than zero.';
     }
 
+    if ($new_password !== '' && !new_password_is_valid($new_password)) {
+        $errors[] = 'Use at least 12 characters and at most 72 bytes for the new password.';
+    }
     if (empty($errors)) {
         try {
             $pdo->beginTransaction();
+            $lock = $pdo->prepare('SELECT id FROM doctors WHERE id = ? FOR UPDATE');
+            $lock->execute([$doctor_id]);
+            if (!$lock->fetchColumn()) {
+                throw new RuntimeException('Doctor was removed.');
+            }
 
             // 1. Update users table with updated email and optional new password
             if (!empty($new_password)) {
-                if (strlen($new_password) < 6) {
-                    throw new Exception('New password must be at least 6 characters long.');
-                }
                 $hashed = password_hash($new_password, PASSWORD_DEFAULT);
                 $u_stmt = $pdo->prepare("UPDATE users SET full_name = ?, email = ?, phone = ?, password = ? WHERE id = ?");
                 $u_stmt->execute([$full_name, $email, $phone, $hashed, $doctor['user_id']]);
@@ -122,7 +127,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            $errors[] = 'Error updating doctor profile: ' . $e->getMessage();
+            report_app_error($e);
+            $errors[] = 'Unable to save changes right now. Please try again.';
         }
     }
 }
@@ -156,6 +162,7 @@ require_once __DIR__ . '/includes/header.php';
             <?php endif; ?>
 
             <form action="admin_doctor_edit.php?id=<?php echo $doctor_id; ?>" method="POST" id="edit-doctor-form">
+                <?= csrf_field() ?>
                 <div class="form-group">
                     <label class="form-label" for="full_name">Doctor Full Name</label>
                     <input 

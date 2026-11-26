@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/includes/clinic_queue.php';
 
 // Access control: Doctor only
 require_doctor();
@@ -30,20 +31,20 @@ if (!$doctor) {
 }
 
 $doctor_id = (int)$doctor['doctor_id'];
-$status_filter = isset($_GET['status']) ? trim($_GET['status']) : 'all';
+$status_filter = is_string($_GET['status'] ?? null) ? $_GET['status'] : 'all';
 
 // Query counts for doctor statistics
 $stats_stmt = $pdo->prepare("
     SELECT 
         COUNT(*) AS total_count,
-        SUM(CASE WHEN appointment_date = CURDATE() AND status = 'booked' THEN 1 ELSE 0 END) AS today_count,
+        SUM(CASE WHEN appointment_date = ? AND status = 'booked' THEN 1 ELSE 0 END) AS today_count,
         SUM(CASE WHEN status = 'booked' THEN 1 ELSE 0 END) AS booked_count,
         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
         SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_count
     FROM appointments
     WHERE doctor_id = ?
 ");
-$stats_stmt->execute([$doctor_id]);
+$stats_stmt->execute([date('Y-m-d'), $doctor_id]);
 $stats = $stats_stmt->fetch();
 
 $total_count     = (int)($stats['total_count'] ?? 0);
@@ -59,6 +60,8 @@ $sql = "
         a.appointment_date,
         a.appointment_time,
         a.status,
+        a.checked_in_at,
+        a.consultation_started_at,
         a.reason,
         a.doctor_notes,
         a.created_at,
@@ -72,7 +75,8 @@ $sql = "
 $params = [$doctor_id];
 
 if ($status_filter === 'today') {
-    $sql .= " AND a.appointment_date = CURDATE() AND a.status = 'booked'";
+    $sql .= " AND a.appointment_date = ? AND a.status = 'booked'";
+    $params[] = date('Y-m-d');
 } elseif (in_array($status_filter, ['booked', 'completed', 'cancelled'], true)) {
     $sql .= " AND a.status = ?";
     $params[] = $status_filter;
@@ -98,36 +102,19 @@ require_once __DIR__ . '/includes/header.php';
                 </h1>
                 <span class="badge badge-specialty"><?php echo e($doctor['specialty_name']); ?></span>
             </div>
-            <p style="color: var(--text-secondary); margin: 0;">
-                <?php echo e($doctor['qualification']); ?> &middot; <?php echo e($doctor['experience_years']); ?> Years Experience &middot; Fee: <strong>PKR <?php echo number_format($doctor['fee'], 0); ?></strong>
-            </p>
+
         </div>
-        <div style="font-size: 0.9rem; color: var(--text-muted); background: #ffffff; padding: 10px 16px; border: 1px solid var(--border); border-radius: var(--radius-md);">
-            📅 Today is <strong><?php echo date('l, d M Y'); ?></strong>
-        </div>
+
     </div>
 </div>
 
-<!-- Doctor Statistics Cards -->
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 28px;">
-    <div class="card" style="padding: 18px 20px;">
-        <span class="stat-label">Total Patients Seen</span>
-        <div style="font-size: 1.7rem; font-weight: 800; color: var(--primary); margin-top: 4px;"><?php echo $total_count; ?></div>
-    </div>
-    <div class="card" style="padding: 18px 20px; border-left: 4px solid var(--accent);">
-        <span class="stat-label">Today's Remaining</span>
-        <div style="font-size: 1.7rem; font-weight: 800; color: var(--accent); margin-top: 4px;"><?php echo $today_count; ?></div>
-    </div>
-    <div class="card" style="padding: 18px 20px; border-left: 4px solid var(--warning);">
-        <span class="stat-label">Upcoming / Booked</span>
-        <div style="font-size: 1.7rem; font-weight: 800; color: var(--warning); margin-top: 4px;"><?php echo $booked_count; ?></div>
-    </div>
-    <div class="card" style="padding: 18px 20px; border-left: 4px solid var(--success);">
-        <span class="stat-label">Completed Visits</span>
-        <div style="font-size: 1.7rem; font-weight: 800; color: var(--success); margin-top: 4px;"><?php echo $completed_count; ?></div>
-    </div>
-</div>
+<?php
+$queueRole = 'doctor';
+$queueData = (new ClinicQueue($pdo))->doctorQueue($doctor_id);
+require __DIR__ . '/includes/queue_section.php';
+?>
 
+<h2 class="queue-history-title">Schedule and visit history</h2>
 <!-- Filter Tabs -->
 <div style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px; flex-wrap: wrap;">
     <a href="doctor_dashboard.php?status=all" class="btn btn-sm <?php echo ($status_filter === 'all') ? 'btn-dark' : 'btn-outline'; ?>" id="filter-all">
@@ -164,14 +151,14 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 <?php else: ?>
     <div class="card" style="overflow-x: auto;">
-        <table class="table" style="width: 100%; border-collapse: collapse; text-align: left;" id="doctor-appointments-table">
+        <table role="table" class="table clinic-history-table" style="width: 100%; border-collapse: collapse; text-align: left;" id="doctor-appointments-table">
             <thead>
                 <tr style="border-bottom: 2px solid var(--border); background-color: #f8fafc;">
-                    <th style="padding: 14px 18px; font-weight: 700; font-size: 0.85rem; color: var(--text-secondary);">Patient Details</th>
-                    <th style="padding: 14px 18px; font-weight: 700; font-size: 0.85rem; color: var(--text-secondary);">Date & Time</th>
-                    <th style="padding: 14px 18px; font-weight: 700; font-size: 0.85rem; color: var(--text-secondary);">Reason / Symptoms</th>
-                    <th style="padding: 14px 18px; font-weight: 700; font-size: 0.85rem; color: var(--text-secondary);">Status</th>
-                    <th style="padding: 14px 18px; font-weight: 700; font-size: 0.85rem; color: var(--text-secondary); text-align: right;">Manage</th>
+                    <th scope="col" style="padding: 14px 18px; font-weight: 700; font-size: 0.85rem; color: var(--text-secondary);">Patient Details</th>
+                    <th scope="col" style="padding: 14px 18px; font-weight: 700; font-size: 0.85rem; color: var(--text-secondary);">Date & Time</th>
+                    <th scope="col" style="padding: 14px 18px; font-weight: 700; font-size: 0.85rem; color: var(--text-secondary);">Reason / Symptoms</th>
+                    <th scope="col" style="padding: 14px 18px; font-weight: 700; font-size: 0.85rem; color: var(--text-secondary);">Status</th>
+                    <th scope="col" style="padding: 14px 18px; font-weight: 700; font-size: 0.85rem; color: var(--text-secondary); text-align: right;">Manage</th>
                 </tr>
             </thead>
             <tbody>
@@ -182,9 +169,9 @@ require_once __DIR__ . '/includes/header.php';
                         $formatted_date = date('D, d M Y', strtotime($apt['appointment_date']));
                         $is_today = ($apt['appointment_date'] === date('Y-m-d'));
                     ?>
-                    <tr style="border-bottom: 1px solid var(--border);">
+                    <tr role="row" style="border-bottom: 1px solid var(--border);">
                         <!-- Patient Info -->
-                        <td style="padding: 16px 18px;">
+                        <td role="cell" data-label="Patient" style="padding: 16px 18px;">
                             <div style="font-weight: 700; color: var(--text-primary); font-size: 0.95rem;">
                                 <?php echo e($apt['patient_name']); ?>
                             </div>
@@ -194,7 +181,7 @@ require_once __DIR__ . '/includes/header.php';
                         </td>
 
                         <!-- Date & Time -->
-                        <td style="padding: 16px 18px; white-space: nowrap;">
+                        <td role="cell" data-label="Date and time" style="padding: 16px 18px; white-space: nowrap;">
                             <div style="font-weight: 600; color: var(--text-primary); font-size: 0.92rem;">
                                 <?php echo $formatted_date; ?>
                                 <?php if ($is_today): ?>
@@ -207,7 +194,7 @@ require_once __DIR__ . '/includes/header.php';
                         </td>
 
                         <!-- Reason -->
-                        <td style="padding: 16px 18px; max-width: 280px;">
+                        <td role="cell" data-label="Reason" style="padding: 16px 18px; max-width: 280px;">
                             <div style="font-size: 0.9rem; color: var(--text-primary);">
                                 <?php echo !empty($apt['reason']) ? e($apt['reason']) : '<span style="color: #94a3b8; font-style: italic;">Routine Consultation</span>'; ?>
                             </div>
@@ -222,47 +209,31 @@ require_once __DIR__ . '/includes/header.php';
                         </td>
 
                         <!-- Status Badge -->
-                        <td style="padding: 16px 18px; white-space: nowrap;">
+                        <td role="cell" data-label="Status" style="padding: 16px 18px; white-space: nowrap;">
                             <?php if ($apt['status'] === 'booked'): ?>
-                                <span class="badge badge-booked">Booked</span>
+                                <span class="badge badge-booked"><?= e(ucfirst(ClinicQueue::visitState($apt))) ?></span>
                             <?php elseif ($apt['status'] === 'completed'): ?>
                                 <span class="badge badge-completed">Completed</span>
                             <?php else: ?>
-                                <span class="badge badge-cancelled">Cancelled</span>
+                                <span class="badge badge-cancelled"><?= $apt['status'] === 'no_show' ? 'Missed' : 'Cancelled' ?></span>
                             <?php endif; ?>
                         </td>
 
                         <!-- Actions -->
-                        <td style="padding: 16px 18px; text-align: right; white-space: nowrap;">
-                            <?php if ($apt['status'] === 'booked'): ?>
-                                <div style="display: inline-flex; gap: 6px;">
-                                    <a href="doctor_complete_appointment.php?id=<?php echo (int)$apt['appointment_id']; ?>" class="btn btn-sm" style="background-color: var(--success); color: #ffffff;" title="Complete & write prescription">
-                                        ✓ Complete
-                                    </a>
-
+                        <td role="cell" data-label="Actions" style="padding: 16px 18px; text-align: right; white-space: nowrap;">
+                            <?php if ($apt['status'] === 'booked' && $apt['consultation_started_at'] !== null): ?>
+                                <a class="btn btn-outline btn-sm" href="doctor_complete_appointment.php?id=<?= (int)$apt['appointment_id'] ?>">Finish visit</a>
+                            <?php elseif ($apt['status'] === 'booked'): ?>
                                     <form action="doctor_update_status.php" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to cancel this appointment?');">
+                                        <?= csrf_field() ?>
                                         <input type="hidden" name="appointment_id" value="<?php echo (int)$apt['appointment_id']; ?>">
                                         <input type="hidden" name="status" value="cancelled">
                                         <button type="submit" class="btn btn-outline btn-sm" style="color: var(--danger); border-color: var(--border);" title="Cancel appointment">
                                             Cancel
                                         </button>
                                     </form>
-                                </div>
                             <?php elseif ($apt['status'] === 'completed'): ?>
-                                <div>
-                                    <span style="font-size: 0.85rem; color: var(--success); font-weight: 600;">
-                                        ✓ Completed
-                                    </span>
-                                    <div style="margin-top: 2px;">
-                                        <a href="doctor_complete_appointment.php?id=<?php echo (int)$apt['appointment_id']; ?>" style="font-size: 0.78rem; color: var(--accent); text-decoration: underline;">
-                                            Edit Rx Notes
-                                        </a>
-                                    </div>
-                                </div>
-                            <?php else: ?>
-                                <span style="font-size: 0.85rem; color: var(--text-muted);">
-                                    Cancelled
-                                </span>
+                                <a class="btn btn-outline btn-sm" href="appointment_slip.php?id=<?= (int)$apt['appointment_id'] ?>">View visit notes</a>
                             <?php endif; ?>
                         </td>
                     </tr>
